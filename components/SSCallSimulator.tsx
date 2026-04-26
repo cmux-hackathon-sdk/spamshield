@@ -62,6 +62,40 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
     }
   };
 
+  const playSirenSound = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = audioContext.current || new AudioCtx();
+      if (!audioContext.current) audioContext.current = ctx;
+
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      
+      osc.type = 'sawtooth';
+      
+      const now = ctx.currentTime;
+      // High pitched alarming alternating siren
+      osc.frequency.setValueAtTime(1200, now);
+      osc.frequency.setValueAtTime(800, now + 0.2);
+      osc.frequency.setValueAtTime(1200, now + 0.4);
+      osc.frequency.setValueAtTime(800, now + 0.6);
+      osc.frequency.setValueAtTime(1200, now + 0.8);
+      osc.frequency.setValueAtTime(800, now + 1.0);
+      
+      gain.gain.setValueAtTime(0.05, now);
+      gain.gain.linearRampToValueAtTime(0.05, now + 1.1);
+      gain.gain.linearRampToValueAtTime(0.001, now + 1.2);
+      
+      osc.start(now);
+      osc.stop(now + 1.2);
+    } catch (e) {
+      console.warn('Siren playback failed', e);
+    }
+  };
+
   const fetchScammerReply = async () => {
     const transcript = eventsRef.current
       .filter(e => e.type === 'bot' || e.type === 'agent_response')
@@ -114,6 +148,7 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
 
     await playDeepgramTTS(initialText, 'aura-orion-en', async () => {
       setDemoState('detected');
+      playSirenSound();
       setEvents(p => [...p, { type: 'system', text: '🚨 SPAM THREAT DETECTED: Financial Impersonation 🚨' }]);
 
       await new Promise(r => setTimeout(r, 1500));
