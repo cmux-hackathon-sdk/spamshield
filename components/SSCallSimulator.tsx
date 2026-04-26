@@ -215,53 +215,41 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
   };
 
   
-  // ── PRE-RECORDED FALLBACK DEMO ──
+  
+  // ── PRE-RECORDED FALLBACK DEMO (Real Audio) ──
   const startPrerecordedDemo = async () => {
     setDemoState('incoming');
     setEvents([]);
     isScammerSpeakingRef.current = true;
     
     const script = [
-      { type: 'bot', text: "Hello, this is Richard from Amazon Customer Support. We detected a fraudulent charge of $499 on your account." },
-      { type: 'agent_response', text: "Oh hello? Who is this, dear? I wasn't expecting a call today." },
-      { type: 'bot', text: "Yes ma'am, to cancel this charge and secure your account, we need you to purchase an Apple gift card." },
-      { type: 'agent_response', text: "A gift card? Oh goodness, my grandson handles all that. What number can I call you back on?" },
+      { type: 'bot', text: "Hello, this is Richard from Amazon Customer Support. We detected a fraudulent charge of $499 on your account.", audio: 0 },
+      { type: 'agent_response', text: "Oh hello? Who is this, dear? I wasn't expecting a call today.", audio: 1 },
+      { type: 'bot', text: "Yes ma'am, to cancel this charge and secure your account, we need you to purchase an Apple gift card.", audio: 2 },
+      { type: 'agent_response', text: "A gift card? Oh goodness, my grandson handles all that. What number can I call you back on?", audio: 3 },
       { type: 'entity_extracted', entity: { type: 'payment_method', value: 'Gift card', confidence: 0.95 } },
-      { type: 'bot', text: "Please write down your cancellation case number. It is AZ dash 9 9 4 2. Do you have that?" },
-      { type: 'agent_response', text: "Let me write that down... AZ-9942 was it? Let me read it back to make sure I have it right." },
+      { type: 'bot', text: "Please write down your cancellation case number. It is AZ dash 9 9 4 2. Do you have that?", audio: 4 },
+      { type: 'agent_response', text: "Let me write that down... AZ-9942 was it? Let me read it back to make sure I have it right.", audio: 5 },
       { type: 'entity_extracted', entity: { type: 'case_id', value: 'AZ-9942', confidence: 0.95 } },
       { type: 'entity_extracted', entity: { type: 'institution', value: 'Amazon', confidence: 0.90 } },
-      { type: 'bot', text: "If you do not comply, we will have to suspend your account and contact local authorities immediately." },
-      { type: 'agent_response', text: "Oh dear, my tea kettle is boiling over, I have to go now, goodbye!" }
+      { type: 'bot', text: "If you do not comply, we will have to suspend your account and contact local authorities immediately.", audio: 6 },
+      { type: 'agent_response', text: "Oh dear, my tea kettle is boiling over, I have to go now, goodbye!", audio: 7 }
     ];
-
-    let hasAudioFile = false;
-    const audio = new Audio('/demo.mp3');
-    try {
-      await audio.play();
-      hasAudioFile = true;
-    } catch (e) {
-      console.warn("No /demo.mp3 found, falling back to native browser TTS sync");
-      hasAudioFile = false;
-    }
 
     const initial = script[0];
     setEvents([{ type: 'bot', text: initial.text }]);
 
-    const playSync = (text: string, isBot: boolean, onEnd: () => void) => {
-      if (hasAudioFile) {
-        const words = text.split(' ').length;
-        setTimeout(onEnd, words * 380 + 400); // Estimate duration
-      } else {
-        const u = new SpeechSynthesisUtterance(text);
-        u.pitch = isBot ? 0.8 : 1.3;
-        u.rate = 0.95;
-        u.onend = onEnd;
-        window.speechSynthesis.speak(u);
-      }
+    const playSync = (audioIdx: number, onEnd: () => void) => {
+      const audio = new Audio(`/prerecorded/step_${audioIdx}.mp3`);
+      audio.onended = onEnd;
+      audio.onerror = () => {
+        console.warn(`Failed to play step_${audioIdx}.mp3. Ensure files are in public/prerecorded/`);
+        setTimeout(onEnd, 3000);
+      };
+      audio.play();
     };
 
-    playSync(initial.text!, true, async () => {
+    playSync(0, async () => {
       setDemoState('detected');
       playSirenSound();
       setEvents(p => [...p, { type: 'system', text: '🚨 SPAM THREAT DETECTED: Financial Impersonation 🚨' }]);
@@ -297,7 +285,7 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
         } else {
           await new Promise(r => setTimeout(r, 800)); // Natural pause
           setEvents(p => [...p, step as Event]);
-          playSync(step.text!, step.type === 'bot', playNext);
+          playSync(step.audio as number, playNext);
         }
       };
       
