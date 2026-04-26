@@ -54,6 +54,29 @@ export default function Page() {
     return () => { cancelled = true; };
   }, [addToast]);
 
+
+  const playAlertSound = useCallback(() => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'square';
+      const now = ctx.currentTime;
+      osc.frequency.setValueAtTime(880, now); // A5
+      osc.frequency.setValueAtTime(1108.73, now + 0.1); // C#6
+      gain.gain.setValueAtTime(0.05, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+      osc.start(now);
+      osc.stop(now + 0.3);
+    } catch (e) {
+      console.warn('Audio playback failed', e);
+    }
+  }, []);
+
   // Subscribe to backend WebSocket incident broadcasts.
   useEffect(() => {
     let ws: WebSocket | null = null;
@@ -71,6 +94,7 @@ export default function Page() {
             const incident = data.incident as Incident;
             addIncident(incident);
             addToast(`New ${SCAM_TYPES[incident.type]?.short ?? 'SCAM'} incident — ${incident.location.city}`, 'danger');
+            playAlertSound();
           } 
           else if (data.type === 'entity_extracted' && data.incident_id) {
             setIncidents(prev => prev.map(inc => {
@@ -105,7 +129,7 @@ export default function Page() {
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
       ws?.close();
     };
-  }, [addIncident, addToast]);
+  }, [addIncident, addToast, playAlertSound]);
 
   // Age live → recent after 5 min
   useEffect(() => {
