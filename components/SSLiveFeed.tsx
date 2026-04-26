@@ -12,8 +12,14 @@ interface SSLiveFeedProps {
 
 export function SSLiveFeed({ incidents, selectedId, onSelectIncident }: SSLiveFeedProps) {
   const [paused, setPaused] = useState(false);
+  const [, setTick] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevLen = useRef(incidents.length);
+
+  useEffect(() => {
+    const iv = setInterval(() => setTick(t => t + 1), 60000); // Re-render every minute for relative times
+    return () => clearInterval(iv);
+  }, []);
 
   useEffect(() => {
     if (paused) return;

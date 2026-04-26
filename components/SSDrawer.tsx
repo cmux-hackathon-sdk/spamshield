@@ -21,6 +21,12 @@ export function SSDrawer({ incident, onClose, onToast }: SSDrawerProps) {
   const [exported, setExported] = useState(incident.leExported);
   const [blacklisted, setBlacklisted] = useState(incident.blacklisted);
   const [loadingDots, setLoadingDots] = useState('');
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    const iv = setInterval(() => setTick(t => t + 1), 60000); // Re-render every minute for relative times
+    return () => clearInterval(iv);
+  }, []);
 
   useEffect(() => {
     setExported(incident.leExported);
