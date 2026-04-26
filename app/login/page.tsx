@@ -51,52 +51,118 @@ export default function LoginPage() {
   };
 
   return (
-    <div style={{ width: '100vw', height: '100vh', background: 'var(--bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-primary)' }}>
-      <div style={{ width: 400, background: 'var(--bg-secondary)', border: '1px solid var(--border-emphasis)', borderRadius: 12, padding: 40, boxShadow: '0 20px 40px rgba(0,0,0,0.5)' }}>
-        <div style={{ textAlign: 'center', marginBottom: 30 }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 20, fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 8 }}>
-            <div style={{ width: 10, height: 10, background: 'var(--accent)', borderRadius: '50%', boxShadow: '0 0 10px var(--accent)' }} />
-            SCAMSHIELD
+    <div style={{ 
+      width: '100vw', 
+      height: '100vh', 
+      backgroundColor: '#000000', 
+      color: '#ffffff', 
+      fontFamily: '"Courier New", Courier, monospace',
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center',
+      position: 'relative'
+    }}>
+      {/* Noise overlay */}
+      <div style={{
+        position: 'fixed',
+        top: 0, left: 0, right: 0, bottom: 0,
+        opacity: 0.04,
+        pointerEvents: 'none',
+        backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22/%3E%3C/svg%3E")',
+        zIndex: 50
+      }} />
+
+      <div style={{ 
+        width: '400px', 
+        border: '1px solid #333', 
+        padding: '40px', 
+        backgroundColor: '#000',
+        zIndex: 10
+      }}>
+        <div style={{ textAlign: 'left', marginBottom: '30px' }}>
+          <div style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '8px' }}>
+            [SCAMSHIELD_AUTH]
           </div>
-          <h1 style={{ fontSize: 24, fontWeight: 700 }}>Agent Login</h1>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>Secure Access Gateway</p>
+          <p style={{ fontSize: '12px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+            Provide credentials for access
+          </p>
         </div>
 
-        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Email Address</label>
+            <label style={{ display: 'block', fontSize: '12px', color: '#aaa', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '8px' }}>
+              &gt; IDENTIFIER
+            </label>
             <input 
               type="email" 
               required
               value={email}
               onChange={e => setEmail(e.target.value)}
-              style={{ width: '100%', background: 'var(--bg-tertiary)', border: '1px solid var(--border-subtle)', borderRadius: 6, padding: '12px 14px', color: 'var(--text-primary)', outline: 'none', fontSize: 14 }}
+              style={{ 
+                width: '100%', 
+                backgroundColor: 'transparent', 
+                border: '1px solid #333', 
+                padding: '12px', 
+                color: '#fff', 
+                outline: 'none', 
+                fontFamily: '"Courier New", Courier, monospace',
+                fontSize: '14px' 
+              }}
             />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Password</label>
+            <label style={{ display: 'block', fontSize: '12px', color: '#aaa', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '8px' }}>
+              &gt; PASSPHRASE
+            </label>
             <input 
               type="password" 
               required
               value={password}
               onChange={e => setPassword(e.target.value)}
-              style={{ width: '100%', background: 'var(--bg-tertiary)', border: '1px solid var(--border-subtle)', borderRadius: 6, padding: '12px 14px', color: 'var(--text-primary)', outline: 'none', fontSize: 14 }}
+              style={{ 
+                width: '100%', 
+                backgroundColor: 'transparent', 
+                border: '1px solid #333', 
+                padding: '12px', 
+                color: '#fff', 
+                outline: 'none', 
+                fontFamily: '"Courier New", Courier, monospace',
+                fontSize: '14px' 
+              }}
             />
           </div>
 
-          {error && <div style={{ fontSize: 13, color: 'var(--threat-live)', background: 'rgba(220,38,38,0.1)', padding: 10, borderRadius: 6, border: '1px solid rgba(220,38,38,0.2)' }}>{error}</div>}
+          {error && <div style={{ fontSize: '12px', color: '#ff0000', marginTop: '10px' }}>[ERROR] {error}</div>}
 
           <button 
             type="submit" 
             disabled={loading}
-            style={{ width: '100%', padding: 14, background: 'var(--accent)', color: '#000', border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 700, cursor: loading ? 'wait' : 'pointer', marginTop: 10 }}
+            style={{ 
+              width: '100%', 
+              padding: '14px', 
+              backgroundColor: '#fff', 
+              color: '#000', 
+              border: 'none', 
+              fontFamily: '"Courier New", Courier, monospace',
+              fontSize: '14px', 
+              fontWeight: 'bold', 
+              textTransform: 'uppercase',
+              cursor: loading ? 'wait' : 'pointer', 
+              marginTop: '20px' 
+            }}
           >
-            {loading ? 'Authenticating...' : 'Authenticate'}
+            {loading ? 'AUTHENTICATING...' : 'EXECUTE'}
           </button>
         </form>
 
-        <div style={{ textAlign: 'center', marginTop: 24, fontSize: 13, color: 'var(--text-tertiary)' }}>
-          Don't have clearance? <Link href="/register" style={{ color: 'var(--accent)', textDecoration: 'none' }}>Request Access</Link>
+        <div style={{ textAlign: 'center', marginTop: '24px', fontSize: '12px', color: '#666' }}>
+          NO CLEARANCE? <Link href="/register" style={{ color: '#fff', textDecoration: 'underline' }}>REQUEST ACCESS</Link>
+        </div>
+        
+        <div style={{ marginTop: '24px', textAlign: 'center' }}>
+          <Link href="/" style={{ color: '#666', fontSize: '12px', textDecoration: 'none' }}>
+            &lt; RETURN_TO_ROOT
+          </Link>
         </div>
       </div>
     </div>

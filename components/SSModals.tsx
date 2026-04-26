@@ -260,7 +260,7 @@ export function SSSettings({ onClose, onToast }: { onClose: () => void; onToast:
 /* ─── Help ─── */
 export function SSHelp({ onClose }: { onClose: () => void }) {
   const sections: { title: string; items?: string[]; body?: string }[] = [
-    { title: 'QUICK START', items: ['Click any dot on the map to view incident details', 'Use the Layers panel to filter by scam type', 'Time range buttons show incidents within that window', 'LE Portal: export incident data for law enforcement'] },
+    { title: 'QUICK START', items: ['Click any dot on the map to view incident details', 'Use the Layers panel to filter by scam type', 'Time range buttons show incidents within that window', 'Law Enforcement Portal: export incident data to agencies'] },
     { title: 'ENTITIES & DATA', body: 'Extracted entities are automatically parsed from agent conversation transcripts using AI function calls. Confidence scores indicate extraction accuracy.' },
     { title: 'RISK SCORING', body: 'Risk scores 0–100 computed by Gemini Flash classifier on call transcripts. Critical (>80): Red. Elevated (60–80): Orange. Moderate (40–60): Yellow. Low (<40): Green.' },
     { title: 'CLUSTER MATCHING', body: 'Incidents are clustered by location, scam type, and institution name patterns. Cluster size indicates how many similar calls have been detected in the same campaign.' },

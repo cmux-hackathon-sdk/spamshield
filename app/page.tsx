@@ -1,82 +1,160 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
+
+const ASCII_ART = `
+   _____                     _____ _     _      _     _ 
+  / ____|                   / ____| |   (_)    | |   | |
+ | (___   ___  __ _ _ __   | (___ | |__  _  ___| | __| |
+  \\___ \\ / __|/ _\` | '_ \\   \\___ \\| '_ \\| |/ _ \\ |/ _\` |
+  ____) | (__| (_| | | | |  ____) | | | | |  __/ | (_| |
+ |_____/ \\___|\\__,_|_| |_| |_____/|_| |_|_|\\___|_|\\__,_|
+`;
 
 export default function LandingPage() {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) return null;
+
   return (
-    <div style={{ width: '100vw', height: '100vh', background: 'var(--bg-primary)', display: 'flex', flexDirection: 'column', color: 'var(--text-primary)', overflow: 'hidden', position: 'relative' }}>
-      {/* Background Gradients */}
-      <div style={{ position: 'absolute', top: '-20%', left: '-10%', width: '50%', height: '50%', background: 'radial-gradient(circle, rgba(30,144,255,0.05) 0%, transparent 70%)', zIndex: 0 }} />
-      <div style={{ position: 'absolute', bottom: '-20%', right: '-10%', width: '50%', height: '50%', background: 'radial-gradient(circle, rgba(220,38,38,0.05) 0%, transparent 70%)', zIndex: 0 }} />
-      
-      {/* Grid Pattern Overlay */}
-      <div style={{ 
-        position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 0, opacity: 0.03, pointerEvents: 'none',
-        backgroundImage: 'linear-gradient(var(--border-subtle) 1px, transparent 1px), linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px)',
-        backgroundSize: '40px 40px' 
+    <div style={{ 
+      width: '100vw', 
+      height: '100vh', 
+      backgroundColor: '#000000', 
+      color: '#ffffff', 
+      fontFamily: '"Courier New", Courier, monospace',
+      display: 'flex', 
+      flexDirection: 'column', 
+      overflow: 'auto',
+      position: 'relative'
+    }}>
+      {/* Noise overlay */}
+      <div style={{
+        position: 'fixed',
+        top: 0, left: 0, right: 0, bottom: 0,
+        opacity: 0.04,
+        pointerEvents: 'none',
+        backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22/%3E%3C/svg%3E")',
+        zIndex: 50
       }} />
 
       {/* Header */}
-      <header style={{ padding: '24px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 10, borderBottom: '1px solid var(--border-subtle)' }}>
-        <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 12, height: 12, background: 'var(--accent)', borderRadius: '50%', boxShadow: '0 0 10px var(--accent)' }} />
-          SCAMSHIELD
+      <header style={{ 
+        padding: '30px 40px', 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'flex-start',
+        borderBottom: '1px solid #222'
+      }}>
+        <div style={{ fontSize: '14px', letterSpacing: '0.05em' }}>
+          [SCAMSHIELD_INTELLIGENCE_NODE]
+          <br/>
+          STATUS: <span style={{ color: '#00ff00' }}>ONLINE</span>
         </div>
-        <div style={{ display: 'flex', gap: 20 }}>
-          <Link href="/login" style={{ padding: '8px 20px', background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--border-emphasis)', borderRadius: 6, fontSize: 13, fontWeight: 600, textDecoration: 'none', transition: 'all 0.2s' }}>
-            Agent Login
-          </Link>
-        </div>
+        <Link href="/login" style={{ 
+          color: '#fff', 
+          textDecoration: 'none', 
+          border: '1px solid #fff', 
+          padding: '8px 16px',
+          fontSize: '14px',
+          textTransform: 'uppercase',
+          letterSpacing: '0.1em'
+        }}>
+          Authenticate
+        </Link>
       </header>
 
       {/* Main Content */}
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 10, padding: 20 }}>
-        <div style={{ textAlign: 'center', maxWidth: 800 }}>
-          <div style={{ display: 'inline-block', padding: '6px 16px', background: 'rgba(30,144,255,0.1)', border: '1px solid rgba(30,144,255,0.2)', borderRadius: 20, color: 'var(--accent)', fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 24 }}>
-            Global Threat Intelligence Network
-          </div>
-          <h1 style={{ fontSize: 64, fontWeight: 800, lineHeight: 1.1, marginBottom: 24, letterSpacing: '-0.03em' }}>
-            Detect. Intercept.<br/>
-            <span style={{ color: 'var(--accent)' }}>Neutralize.</span>
-          </h1>
-          <p style={{ fontSize: 18, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 40, maxWidth: 600, margin: '0 auto 40px auto' }}>
-            Real-time AI-powered monitoring of global scam networks. Deploys autonomous decoys to intercept fraud calls, extract actionable intelligence, and feed data to law enforcement agencies worldwide.
+      <main style={{ 
+        flex: 1, 
+        display: 'flex', 
+        flexDirection: 'column', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        padding: '40px 20px'
+      }}>
+        <pre style={{ 
+          fontSize: 'clamp(8px, 1vw, 16px)', 
+          lineHeight: 1.2, 
+          marginBottom: '40px',
+          color: '#ffffff',
+          textShadow: '0 0 10px rgba(255,255,255,0.3)'
+        }}>
+          {ASCII_ART}
+        </pre>
+
+        <div style={{ maxWidth: '600px', textAlign: 'center' }}>
+          <p style={{ 
+            fontSize: '16px', 
+            lineHeight: 1.6, 
+            marginBottom: '40px',
+            color: '#aaaaaa'
+          }}>
+            Real-time AI-powered monitoring of global scam networks. Deploys autonomous decoys to intercept fraud calls, extract actionable intelligence, and neutralize threats.
           </p>
           
-          <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
-            <Link href="/login" style={{ padding: '14px 32px', background: 'var(--accent)', color: '#000', border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 700, textDecoration: 'none', display: 'inline-block', transition: 'transform 0.2s, box-shadow 0.2s', boxShadow: '0 0 20px rgba(212, 212, 212, 0.2)' }}>
-              Access Secure Portal
-            </Link>
-          </div>
+          <Link href="/login" style={{ 
+            display: 'inline-block',
+            backgroundColor: '#ffffff', 
+            color: '#000000', 
+            padding: '16px 32px',
+            fontSize: '16px',
+            fontWeight: 'bold',
+            textDecoration: 'none',
+            textTransform: 'uppercase',
+            letterSpacing: '0.1em'
+          }}>
+            Initialize Link
+          </Link>
         </div>
 
-        {/* Stats Preview */}
-        <div style={{ display: 'flex', gap: 40, marginTop: 80, padding: '30px 60px', background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', borderRadius: 16 }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'monospace' }}>250</div>
-            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 4 }}>FTC Incidents Analyzed</div>
+        <div style={{ 
+          display: 'flex', 
+          gap: '40px', 
+          marginTop: '80px',
+          padding: '20px',
+          borderTop: '1px solid #222',
+          borderBottom: '1px solid #222',
+          width: '100%',
+          maxWidth: '800px',
+          justifyContent: 'space-between'
+        }}>
+          <div>
+            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>250</div>
+            <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>FTC INCIDENTS</div>
           </div>
-          <div style={{ width: 1, background: 'var(--border-subtle)' }} />
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--threat-live)', fontFamily: 'monospace' }}>1.2s</div>
-            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 4 }}>Agent Intercept Latency</div>
+          <div>
+            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>1.2s</div>
+            <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>INTERCEPT LATENCY</div>
           </div>
-          <div style={{ width: 1, background: 'var(--border-subtle)' }} />
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--text-mono)', fontFamily: 'monospace' }}>12</div>
-            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 4 }}>Partner Agencies Ready</div>
+          <div>
+            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>12</div>
+            <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>PARTNER AGENCIES</div>
           </div>
         </div>
       </main>
-      
+
       {/* Footer */}
-      <footer style={{ padding: '20px 40px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', zIndex: 10 }}>
-        <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>© 2026 ScamShield Intelligence. Classified.</div>
-        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{ width: 6, height: 6, background: 'var(--text-mono)', borderRadius: '50%', boxShadow: '0 0 6px var(--text-mono)', animation: 'pulse-dot 2s infinite' }} />
-          SYSTEM STATUS: ONLINE
+      <footer style={{ 
+        padding: '20px 40px', 
+        borderTop: '1px solid #222', 
+        display: 'flex', 
+        justifyContent: 'space-between',
+        fontSize: '12px',
+        color: '#666'
+      }}>
+        <div>(C) 2026 SCAMSHIELD // CLASSIFIED</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ width: '8px', height: '8px', backgroundColor: '#ffffff' }} />
+          SYSTEM_NOMINAL
         </div>
       </footer>
     </div>
   );
 }
+
