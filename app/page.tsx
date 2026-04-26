@@ -9,11 +9,12 @@ import { SSDrawer } from '@/components/SSDrawer';
 import { SSLiveFeed } from '@/components/SSLiveFeed';
 import { SSIncidentList } from '@/components/SSIncidentList';
 import { SSLEPortal, SSSettings, SSHelp } from '@/components/SSModals';
+import { SSCallSimulator } from '@/components/SSCallSimulator';
 import { SSToast, useToasts } from '@/components/SSToast';
 import type { Incident, LayerDefinition, ScamType } from '@/lib/types';
 
 type View = 'map' | 'list';
-type Modal = 'le' | 'settings' | 'help' | null;
+type Modal = 'le' | 'settings' | 'help' | 'simulator' | null;
 
 export default function Page() {
   const [incidents, setIncidents] = useState<Incident[]>([...MOCK_INCIDENTS]);
@@ -172,6 +173,24 @@ export default function Page() {
                   />
                 )}
 
+                {/* Live Call Intercept FAB */}
+                <button
+                  onClick={() => setModal('simulator')}
+                  style={{
+                    position: 'absolute', bottom: 20, right: 180, zIndex: 40,
+                    background: 'var(--bg-secondary)',
+                    color: 'var(--text-primary)', border: '1px solid var(--border-emphasis)', borderRadius: 8,
+                    padding: '10px 18px', fontSize: 13, fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+                    transition: 'all 200ms', letterSpacing: '0.03em',
+                  }}
+                >
+                  <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: 'var(--threat-live)' }} />
+                  Live Intercept
+                </button>
+
                 {/* Simulate Call FAB */}
                 <button
                   onClick={handleSimulate}
@@ -225,6 +244,10 @@ export default function Page() {
       )}
       {modal === 'help' && (
         <SSHelp onClose={() => setModal(null)} />
+      )}
+
+      {modal === 'simulator' && (
+        <SSCallSimulator onClose={() => setModal(null)} />
       )}
 
       <SSToast toasts={toasts} onRemove={removeToast} />
