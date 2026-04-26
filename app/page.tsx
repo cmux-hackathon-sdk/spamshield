@@ -1,256 +1,79 @@
 'use client';
 
-import { useCallback, useState, useEffect, useRef } from 'react';
-import { MOCK_INCIDENTS, LAYER_DEFINITIONS, SCAM_TYPES } from '@/lib/data';
-import { SSHeader } from '@/components/SSHeader';
-import { SSSidebar } from '@/components/SSSidebar';
-import { SSMap } from '@/components/SSMap';
-import { SSDrawer } from '@/components/SSDrawer';
-import { SSLiveFeed } from '@/components/SSLiveFeed';
-import { SSIncidentList } from '@/components/SSIncidentList';
-import { SSLEPortal, SSSettings, SSHelp } from '@/components/SSModals';
-import { SSCallSimulator } from '@/components/SSCallSimulator';
-import { SSToast, useToasts } from '@/components/SSToast';
-import type { Incident, LayerDefinition, ScamType } from '@/lib/types';
+import Link from 'next/link';
 
-type View = 'map' | 'list';
-type Modal = 'le' | 'settings' | 'help' | 'simulator' | null;
-
-export default function Page() {
-  const [incidents, setIncidents] = useState<Incident[]>([...MOCK_INCIDENTS]);
-  const [layers, setLayers] = useState<LayerDefinition[]>([...LAYER_DEFINITIONS]);
-  const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
-  const [timeRange, setTimeRange] = useState('All');
-  const [modal, setModal] = useState<Modal>(null);
-  const [view, setView] = useState<View>('map');
-  const [simulating, setSimulating] = useState(false);
-  const { toasts, addToast, removeToast } = useToasts();
-  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const addIncident = useCallback((incident: Incident) => {
-    setIncidents(prev => [incident, ...prev.filter(item => item.id !== incident.id)].slice(0, 250));
-  }, []);
-
-  // Load seeded FTC incidents from the backend, while keeping mock data as a demo fallback.
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadIncidents() {
-      try {
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
-        const response = await fetch(`${backendUrl}/api/frontend/incidents?limit=250`);
-        if (!response.ok) throw new Error(`Backend returned ${response.status}`);
-        const data = await response.json() as Incident[];
-        if (!cancelled && data.length > 0) {
-          setIncidents(data);
-          addToast(`Loaded ${data.length} FTC robocall incidents`, 'success');
-        }
-      } catch (error) {
-        console.warn('Using mock incidents because backend is unavailable:', error);
-      }
-    }
-
-    loadIncidents();
-    return () => { cancelled = true; };
-  }, [addToast]);
-
-  // Subscribe to backend WebSocket incident broadcasts.
-  useEffect(() => {
-    let ws: WebSocket | null = null;
-    let closed = false;
-
-    function connect() {
-      const wsUrl = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000/ws/live';
-      ws = new WebSocket(wsUrl);
-
-      ws.onmessage = event => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type !== 'incident_created') return;
-          const incident = data.incident as Incident;
-          addIncident(incident);
-          addToast(`New ${SCAM_TYPES[incident.type]?.short ?? 'SCAM'} incident — ${incident.location.city}`, 'danger');
-        } catch (error) {
-          console.warn('Ignored malformed WebSocket message:', error);
-        }
-      };
-
-      ws.onclose = () => {
-        if (closed) return;
-        reconnectTimer.current = setTimeout(connect, 3000);
-      };
-    }
-
-    connect();
-    return () => {
-      closed = true;
-      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
-      ws?.close();
-    };
-  }, [addIncident, addToast]);
-
-  // Age live → recent after 5 min
-  useEffect(() => {
-    const iv = setInterval(() => {
-      const now = Date.now();
-      setIncidents(prev => prev.map(i =>
-        i.status === 'live' && now - i.timestamp > 300000 ? { ...i, status: 'recent' } : i
-      ));
-    }, 30000);
-    return () => clearInterval(iv);
-  }, []);
-
-  function handleLayerToggle(id: ScamType) {
-    setLayers(prev => prev.map(l => l.id === id ? { ...l, enabled: !l.enabled } : l));
-  }
-
-  function handleSelectIncident(inc: Incident) {
-    setSelectedIncident(prev => prev?.id === inc.id ? null : inc);
-  }
-
-  async function handleSimulate() {
-    setSimulating(true);
-    try {
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
-      const hotspots = [
-        { caller_number: '+234 567 890 123', caller_city: 'Lagos', caller_country: 'NG' },
-        { caller_number: '+91 981 234 5678', caller_city: 'Mumbai', caller_country: 'IN' },
-        { caller_number: '+63 917 234 5678', caller_city: 'Manila', caller_country: 'PH' },
-        { caller_number: '+1 646 555 0182', caller_city: 'New York', caller_country: 'US' },
-      ];
-      const pick = hotspots[Math.floor(Math.random() * hotspots.length)];
-      const params = new URLSearchParams(pick);
-      const response = await fetch(`${backendUrl}/api/call/start?${params.toString()}`, { method: 'POST' });
-      if (!response.ok) throw new Error(`Backend returned ${response.status}`);
-      const incident = await response.json() as Incident;
-      addIncident(incident);
-      addToast(`Simulated: ${SCAM_TYPES[incident.type]?.short} in ${incident.location.city}`, 'danger');
-    } catch (error) {
-      console.error('Simulation failed:', error);
-      addToast('Backend simulation failed. Is FastAPI running?', 'danger');
-    } finally {
-      setSimulating(false);
-    }
-  }
-
+export default function LandingPage() {
   return (
-    <div style={{ width: '100vw', height: '100vh', background: 'var(--bg-primary)', display: 'flex', flexDirection: 'column', overflow: 'hidden', color: 'var(--text-primary)' }}>
-      <SSHeader
-        incidents={incidents}
-        onHelp={() => setModal('help')}
-        onSettings={() => setModal('settings')}
-        onRefresh={() => addToast('Data refreshed', 'success')}
-        onLEPortal={() => setModal('le')}
-        view={view}
-        onViewChange={setView}
-      />
+    <div style={{ width: '100vw', height: '100vh', background: 'var(--bg-primary)', display: 'flex', flexDirection: 'column', color: 'var(--text-primary)', overflow: 'hidden', position: 'relative' }}>
+      {/* Background Gradients */}
+      <div style={{ position: 'absolute', top: '-20%', left: '-10%', width: '50%', height: '50%', background: 'radial-gradient(circle, rgba(30,144,255,0.05) 0%, transparent 70%)', zIndex: 0 }} />
+      <div style={{ position: 'absolute', bottom: '-20%', right: '-10%', width: '50%', height: '50%', background: 'radial-gradient(circle, rgba(220,38,38,0.05) 0%, transparent 70%)', zIndex: 0 }} />
+      
+      {/* Grid Pattern Overlay */}
+      <div style={{ 
+        position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 0, opacity: 0.03, pointerEvents: 'none',
+        backgroundImage: 'linear-gradient(var(--border-subtle) 1px, transparent 1px), linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px)',
+        backgroundSize: '40px 40px' 
+      }} />
 
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
-        <SSSidebar
-          layers={layers}
-          onLayerToggle={handleLayerToggle}
-          incidents={incidents}
-          timeRange={timeRange}
-          onTimeRange={setTimeRange}
-        />
-
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
-          {view === 'map' ? (
-            <>
-              <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-                <SSMap
-                  incidents={incidents}
-                  layers={layers}
-                  onSelectIncident={handleSelectIncident}
-                  selectedId={selectedIncident?.id}
-                  timeRange={timeRange}
-                />
-                {selectedIncident && (
-                  <SSDrawer
-                    incident={selectedIncident}
-                    onClose={() => setSelectedIncident(null)}
-                    onToast={addToast}
-                  />
-                )}
-
-                {/* Live Call Intercept FAB */}
-                <button
-                  onClick={() => setModal('simulator')}
-                  style={{
-                    position: 'absolute', bottom: 20, right: 180, zIndex: 40,
-                    background: 'var(--bg-secondary)',
-                    color: 'var(--text-primary)', border: '1px solid var(--border-emphasis)', borderRadius: 8,
-                    padding: '10px 18px', fontSize: 13, fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
-                    transition: 'all 200ms', letterSpacing: '0.03em',
-                  }}
-                >
-                  <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: 'var(--threat-live)' }} />
-                  Live Intercept
-                </button>
-
-                {/* Simulate Call FAB */}
-                <button
-                  onClick={handleSimulate}
-                  disabled={simulating}
-                  style={{
-                    position: 'absolute', bottom: 20, right: 20, zIndex: 40,
-                    background: simulating ? '#1a2a4a' : 'var(--accent)',
-                    color: '#000000', border: 'none', borderRadius: 8,
-                    padding: '10px 18px', fontSize: 13, fontWeight: 700,
-                    cursor: simulating ? 'wait' : 'pointer',
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    boxShadow: '0 4px 20px rgba(30,144,255,0.4)',
-                    transition: 'all 200ms', letterSpacing: '0.03em',
-                  }}
-                >
-                  {simulating ? (
-                    <>
-                      <span style={{ display: 'inline-block', width: 12, height: 12, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#000000', borderRadius: '50%', animation: 'spin 700ms linear infinite' }} />
-                      Simulating…
-                    </>
-                  ) : (
-                    <>
-                      <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: 'var(--threat-live)', boxShadow: '0 0 6px var(--threat-live)', animation: 'pulse-dot 1s ease-in-out infinite' }} />
-                      Simulate Call
-                    </>
-                  )}
-                </button>
-              </div>
-
-              <SSLiveFeed
-                incidents={incidents}
-                selectedId={selectedIncident?.id}
-                onSelectIncident={handleSelectIncident}
-              />
-            </>
-          ) : (
-            <SSIncidentList
-              incidents={incidents}
-              onSelectIncident={handleSelectIncident}
-              selectedId={selectedIncident?.id}
-            />
-          )}
+      {/* Header */}
+      <header style={{ padding: '24px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 10, borderBottom: '1px solid var(--border-subtle)' }}>
+        <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 12, height: 12, background: 'var(--accent)', borderRadius: '50%', boxShadow: '0 0 10px var(--accent)' }} />
+          SCAMSHIELD
         </div>
-      </div>
+        <div style={{ display: 'flex', gap: 20 }}>
+          <Link href="/login" style={{ padding: '8px 20px', background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--border-emphasis)', borderRadius: 6, fontSize: 13, fontWeight: 600, textDecoration: 'none', transition: 'all 0.2s' }}>
+            Agent Login
+          </Link>
+        </div>
+      </header>
 
-      {modal === 'le' && (
-        <SSLEPortal incidents={incidents} onClose={() => setModal(null)} onToast={addToast} />
-      )}
-      {modal === 'settings' && (
-        <SSSettings onClose={() => setModal(null)} onToast={addToast} />
-      )}
-      {modal === 'help' && (
-        <SSHelp onClose={() => setModal(null)} />
-      )}
+      {/* Main Content */}
+      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 10, padding: 20 }}>
+        <div style={{ textAlign: 'center', maxWidth: 800 }}>
+          <div style={{ display: 'inline-block', padding: '6px 16px', background: 'rgba(30,144,255,0.1)', border: '1px solid rgba(30,144,255,0.2)', borderRadius: 20, color: 'var(--accent)', fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 24 }}>
+            Global Threat Intelligence Network
+          </div>
+          <h1 style={{ fontSize: 64, fontWeight: 800, lineHeight: 1.1, marginBottom: 24, letterSpacing: '-0.03em' }}>
+            Detect. Intercept.<br/>
+            <span style={{ color: 'var(--accent)' }}>Neutralize.</span>
+          </h1>
+          <p style={{ fontSize: 18, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 40, maxWidth: 600, margin: '0 auto 40px auto' }}>
+            Real-time AI-powered monitoring of global scam networks. Deploys autonomous decoys to intercept fraud calls, extract actionable intelligence, and feed data to law enforcement agencies worldwide.
+          </p>
+          
+          <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
+            <Link href="/login" style={{ padding: '14px 32px', background: 'var(--accent)', color: '#000', border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 700, textDecoration: 'none', display: 'inline-block', transition: 'transform 0.2s, box-shadow 0.2s', boxShadow: '0 0 20px rgba(212, 212, 212, 0.2)' }}>
+              Access Secure Portal
+            </Link>
+          </div>
+        </div>
 
-      {modal === 'simulator' && (
-        <SSCallSimulator onClose={() => setModal(null)} />
-      )}
-
-      <SSToast toasts={toasts} onRemove={removeToast} />
+        {/* Stats Preview */}
+        <div style={{ display: 'flex', gap: 40, marginTop: 80, padding: '30px 60px', background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', borderRadius: 16 }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'monospace' }}>2.4M+</div>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 4 }}>Calls Intercepted</div>
+          </div>
+          <div style={{ width: 1, background: 'var(--border-subtle)' }} />
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--threat-live)', fontFamily: 'monospace' }}>14.2s</div>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 4 }}>Avg Detection Time</div>
+          </div>
+          <div style={{ width: 1, background: 'var(--border-subtle)' }} />
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--text-mono)', fontFamily: 'monospace' }}>120+</div>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 4 }}>Partner Agencies</div>
+          </div>
+        </div>
+      </main>
+      
+      {/* Footer */}
+      <footer style={{ padding: '20px 40px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', zIndex: 10 }}>
+        <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>© 2026 ScamShield Intelligence. Classified.</div>
+        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'monospace' }}>SYSTEM STATUS: ONLINE</div>
+      </footer>
     </div>
   );
 }
