@@ -29,9 +29,9 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
   useEffect(() => { eventsRef.current = events; }, [events]);
   useEffect(() => { demoStateRef.current = demoState; }, [demoState]);
 
-  const playDeepgramTTS = async (text: string, onEnd: () => void) => {
+  const playDeepgramTTS = async (text: string, voice: string, onEnd: () => void) => {
     try {
-      const res = await fetch('https://api.deepgram.com/v1/speak?model=aura-asteria-en', {
+      const res = await fetch(`https://api.deepgram.com/v1/speak?model=${voice}`, {
         method: 'POST',
         headers: {
           'Authorization': 'Token b4f6867e284c553d38aef0f62902fe30a94228fc',
@@ -80,7 +80,7 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
 
       setEvents(prev => [...prev, { type: 'bot', text: replyText }]);
 
-      await playDeepgramTTS(replyText, () => {
+      await playDeepgramTTS(replyText, 'aura-orion-en', () => {
         if (ws.current?.readyState === WebSocket.OPEN) {
             ws.current?.send(JSON.stringify({ type: 'text', text: replyText }));
         }
@@ -112,7 +112,7 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
     const initialText = "Hello, this is Richard from Amazon Customer Support. We detected a fraudulent charge of $499 on your account.";
     setEvents([{ type: 'bot', text: initialText }]);
 
-    await playDeepgramTTS(initialText, async () => {
+    await playDeepgramTTS(initialText, 'aura-orion-en', async () => {
       setDemoState('detected');
       setEvents(p => [...p, { type: 'system', text: '🚨 SPAM THREAT DETECTED: Financial Impersonation 🚨' }]);
 
@@ -122,52 +122,62 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
       setEvents(p => [...p, { type: 'system', text: 'Routing connection to Autonomous AI Decoy Agent...' }]);
 
       try {
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
-        const res = await fetch(`${backendUrl}/api/call/start?caller_city=Seattle&caller_country=US`, { method: 'POST' });
-        const data = await res.json();
-        const iId = data.id;
-        setIncidentId(iId);
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
+      const res = await fetch(`${backendUrl}/api/call/start?caller_city=Seoul&caller_country=KR`, { method: 'POST' });
+      const data = await res.json();
+      const iId = data.id;
+      setIncidentId(iId);
 
-        const wsUrl = (process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000').replace('http', 'ws') + '/ws/call?incident_id=' + iId;
-        ws.current = new WebSocket(wsUrl);
-        ws.current.binaryType = 'arraybuffer';
+      const wsUrl = (process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000').replace('http', 'ws') + '/ws/call?incident_id=' + iId;
+      ws.current = new WebSocket(wsUrl);
+      ws.current.binaryType = 'arraybuffer';
 
-        ws.current.onopen = () => {
-          setConnected(true);
-          setDemoState('active');
-          setEvents(p => [...p, { type: 'system', text: '> Intercept Successful. Decoy Active.' }]);
+      ws.current.onopen = () => {
+        setConnected(true);
+        setDemoState('active');
+        setEvents(p => [...p, { type: 'system', text: '> Intercept Successful. Decoy Active in Seoul, KR.' }]);
 
-          ws.current?.send(JSON.stringify({ type: 'text', text: initialText }));
-          isScammerSpeakingRef.current = false;
-        };
+        ws.current?.send(JSON.stringify({ type: 'text', text: initialText }));
+        isScammerSpeakingRef.current = false;
+      };
 
-        ws.current.onmessage = async (event) => {
-          if (typeof event.data === 'string') {
-            try {
-              const data = JSON.parse(event.data);
-              if (data.type === 'agent_response' || data.type === 'entity_extracted') {
-                setEvents((prev) => [...prev, data]);
-              } else if (data.type === 'turn_complete') {
+      ws.current.onmessage = async (event) => {
+        if (typeof event.data === 'string') {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'entity_extracted') {
+              setEvents((prev) => [...prev, data]);
+            } else if (data.type === 'agent_response') {
+              setEvents((prev) => [...prev, data]);
+              await playDeepgramTTS(data.text, 'aura-hera-en', () => {
                 handleTurnComplete();
-              }
-            } catch (e) { }
-          } else if (event.data instanceof ArrayBuffer) {
-            if (!audioContext.current) {
-              audioContext.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+              });
+            } else if (data.type === 'turn_complete') {
+              // Now relying on TTS callback instead of direct turn_complete from live API
             }
-            const audioData = new Int16Array(event.data);
-            const floatData = new Float32Array(audioData.length);
-            for (let i = 0; i < audioData.length; i++) floatData[i] = audioData[i] / 32768.0;
-            const buffer = audioContext.current.createBuffer(1, floatData.length, 24000);
-            buffer.copyToChannel(floatData, 0);
-            const source = audioContext.current.createBufferSource();
-            source.buffer = buffer;
-            source.connect(audioContext.current.destination);
-            const playTime = Math.max(audioContext.current.currentTime, nextPlayTime.current);
-            source.start(playTime);
-            nextPlayTime.current = playTime + buffer.duration;
+          } catch (e) { }
+        } else if (event.data instanceof ArrayBuffer) {
+          // Playback incoming 24kHz PCM audio from Gemini Live if available
+          if (!audioContext.current) {
+            audioContext.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
           }
-        };
+          const audioData = new Int16Array(event.data);
+          const floatData = new Float32Array(audioData.length);
+          for (let i = 0; i < audioData.length; i++) floatData[i] = audioData[i] / 32768.0;
+          const buffer = audioContext.current.createBuffer(1, floatData.length, 24000);
+          buffer.copyToChannel(floatData, 0);
+          const source = audioContext.current.createBufferSource();
+          source.buffer = buffer;
+          source.connect(audioContext.current.destination);
+          const playTime = Math.max(audioContext.current.currentTime, nextPlayTime.current);
+          source.start(playTime);
+          nextPlayTime.current = playTime + buffer.duration;
+          
+          source.onended = () => {
+             handleTurnComplete();
+          };
+        }
+      };
 
         ws.current.onclose = () => {
           setConnected(false);
