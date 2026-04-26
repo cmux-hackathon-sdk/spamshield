@@ -53,18 +53,18 @@ export default function LandingPage() {
         {/* Stats Preview */}
         <div style={{ display: 'flex', gap: 40, marginTop: 80, padding: '30px 60px', background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', borderRadius: 16 }}>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'monospace' }}>2.4M+</div>
-            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 4 }}>Calls Intercepted</div>
+            <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'monospace' }}>250</div>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 4 }}>FTC Incidents Analyzed</div>
           </div>
           <div style={{ width: 1, background: 'var(--border-subtle)' }} />
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--threat-live)', fontFamily: 'monospace' }}>14.2s</div>
-            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 4 }}>Avg Detection Time</div>
+            <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--threat-live)', fontFamily: 'monospace' }}>1.2s</div>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 4 }}>Agent Intercept Latency</div>
           </div>
           <div style={{ width: 1, background: 'var(--border-subtle)' }} />
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--text-mono)', fontFamily: 'monospace' }}>120+</div>
-            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 4 }}>Partner Agencies</div>
+            <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--text-mono)', fontFamily: 'monospace' }}>12</div>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 4 }}>Partner Agencies Ready</div>
           </div>
         </div>
       </main>
@@ -72,7 +72,10 @@ export default function LandingPage() {
       {/* Footer */}
       <footer style={{ padding: '20px 40px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', zIndex: 10 }}>
         <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>© 2026 ScamShield Intelligence. Classified.</div>
-        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'monospace' }}>SYSTEM STATUS: ONLINE</div>
+        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ width: 6, height: 6, background: 'var(--text-mono)', borderRadius: '50%', boxShadow: '0 0 6px var(--text-mono)', animation: 'pulse-dot 2s infinite' }} />
+          SYSTEM STATUS: ONLINE
+        </div>
       </footer>
     </div>
   );
