@@ -29,25 +29,89 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
   const [demoState, setDemoState] = useState<'idle'|'incoming'|'detected'|'intercepting'|'active'|'finished'>('idle');
   const [incidentId, setIncidentId] = useState<string|null>(null);
   
-  const demoScript = [
-    "Hello, this is Richard from Amazon Customer Support. We detected a fraudulent charge of $499 on your account.",
-    "Yes ma'am, to cancel this charge and secure your account, we need you to purchase an Apple gift card.",
-    "Please write down your cancellation case number. It is AZ dash 9 9 4 2. Do you have that?",
-    "If you do not comply, we will have to suspend your account and contact local authorities immediately."
-  ];
-  const botStep = useRef(0);
+  const eventsRef = useRef<Event[]>([]);
+  const demoStateRef = useRef(demoState);
+  const isScammerSpeakingRef = useRef(false);
+
+  useEffect(() => { eventsRef.current = events; }, [events]);
+  useEffect(() => { demoStateRef.current = demoState; }, [demoState]);
+
+  const playDeepgramTTS = async (text: string, onEnd: () => void) => {
+    try {
+      const res = await fetch('https://api.deepgram.com/v1/speak?model=aura-asteria-en', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Token b4f6867e284c553d38aef0f62902fe30a94228fc',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ text })
+      });
+      if (!res.ok) throw new Error('Deepgram HTTP error');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.onended = () => {
+        onEnd();
+        URL.revokeObjectURL(url);
+      };
+      audio.play();
+    } catch (e) {
+      console.error("Deepgram TTS error", e);
+      onEnd();
+    }
+  };
+
+  const fetchScammerReply = async () => {
+    const transcript = eventsRef.current
+      .filter(e => e.type === 'bot' || e.type === 'agent_response')
+      .map(e => `${e.type === 'bot' ? 'Richard' : 'Margaret'}: ${e.text}`)
+      .join('\n');
+      
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
+      const res = await fetch(`${backendUrl}/api/call/scammer-reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcript })
+      });
+      const data = await res.json();
+      const replyText = data.text;
+      
+      setEvents(prev => [...prev, { type: 'bot', text: replyText }]);
+      
+      await playDeepgramTTS(replyText, () => {
+        if (ws.current?.readyState === WebSocket.OPEN) {
+            ws.current?.send(JSON.stringify({ type: 'text', text: replyText }));
+        }
+        isScammerSpeakingRef.current = false;
+      });
+    } catch(e) {
+      console.error(e);
+      isScammerSpeakingRef.current = false;
+    }
+  };
+
+  const handleTurnComplete = () => {
+    if (demoStateRef.current !== 'active' || isScammerSpeakingRef.current) return;
+    isScammerSpeakingRef.current = true;
+    
+    const currentTime = audioContext.current?.currentTime || 0;
+    const timeToWait = Math.max(0, (nextPlayTime.current - currentTime) * 1000);
+    
+    setTimeout(() => {
+      fetchScammerReply();
+    }, timeToWait + 800); // 800ms natural pause before scammer responds
+  };
 
   const startDemo = async () => {
     setDemoState('incoming');
     setEvents([]);
+    isScammerSpeakingRef.current = true; // Prevent overlapping triggers
     
-    const text1 = demoScript[0];
-    setEvents([{ type: 'bot', text: text1 }]);
+    const initialText = "Hello, this is Richard from Amazon Customer Support. We detected a fraudulent charge of $499 on your account.";
+    setEvents([{ type: 'bot', text: initialText }]);
     
-    const utter = new SpeechSynthesisUtterance(text1);
-    utter.rate = 0.95; utter.pitch = 0.8;
-    
-    utter.onend = async () => {
+    await playDeepgramTTS(initialText, async () => {
       setDemoState('detected');
       setEvents(p => [...p, { type: 'system', text: '🚨 SPAM DETECTED: Financial Impersonation 🚨' }]);
       
@@ -71,8 +135,9 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
           setConnected(true);
           setDemoState('active');
           setEvents(p => [...p, { type: 'system', text: 'System: Intercept Successful. Decoy Active.' }]);
-          botStep.current = 1;
-          ws.current?.send(JSON.stringify({ type: 'text', text: text1 }));
+          
+          ws.current?.send(JSON.stringify({ type: 'text', text: initialText }));
+          isScammerSpeakingRef.current = false;
         };
         
         ws.current.onmessage = async (event) => {
@@ -82,21 +147,7 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
               if (data.type === 'agent_response' || data.type === 'entity_extracted') {
                 setEvents((prev) => [...prev, data]);
               } else if (data.type === 'turn_complete') {
-                if (botStep.current < demoScript.length && demoState !== 'finished') {
-                  const msg = demoScript[botStep.current];
-                  setEvents((prev) => [...prev, { type: 'bot', text: msg }]);
-                  
-                  const u2 = new SpeechSynthesisUtterance(msg);
-                  u2.rate = 0.95; u2.pitch = 0.8;
-                  u2.onend = () => {
-                     ws.current?.send(JSON.stringify({ type: 'text', text: msg }));
-                  };
-                  window.speechSynthesis.speak(u2);
-                  botStep.current += 1;
-                } else if (botStep.current >= demoScript.length) {
-                  setDemoState('finished');
-                  setEvents(p => [...p, { type: 'system', text: 'System: Simulation Complete.' }]);
-                }
+                handleTurnComplete();
               }
             } catch (e) { }
           } else if (event.data instanceof ArrayBuffer) {
@@ -124,14 +175,12 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
 
       } catch(e) {
         console.error(e);
+        setDemoState('idle');
       }
-    };
-    
-    window.speechSynthesis.speak(utter);
+    });
   };
 
   const startRecording = async () => {
-    if (botMode) setBotMode(false); // Disable bot if manual recording
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
@@ -250,7 +299,7 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
               return (
                 <div key={i} style={{ alignSelf: isUser ? 'flex-end' : 'flex-start', maxWidth: '80%' }}>
                   <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 4, textAlign: isUser ? 'right' : 'left' }}>
-                    {isUser ? (ev.type === 'bot' ? 'Auto-Scammer Bot' : 'You (Scammer)') : 'Decoy Agent'}
+                    {isUser ? (ev.type === 'bot' ? 'Autonomous Scammer' : 'You (Scammer)') : 'Decoy Agent'}
                   </div>
                   <div style={{
                     background: isUser ? (ev.type === 'bot' ? '#f97316' : 'var(--accent)') : 'var(--bg-tertiary)',
@@ -269,13 +318,13 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
             <button 
               type="button"
               onClick={toggleRecording} 
-              disabled={!connected || demoState !== 'active'} 
+              disabled={!connected || demoState === 'active'} 
               style={{
                 width: 40, height: 40, borderRadius: '50%', border: 'none',
                 background: recording ? 'var(--threat-live)' : 'var(--bg-tertiary)', 
                 color: recording ? '#ffffff' : 'var(--text-primary)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: (connected && demoState === 'active') ? 'pointer' : 'not-allowed', opacity: (connected && demoState === 'active') ? 1 : 0.5,
+                cursor: (connected && demoState !== 'active') ? 'pointer' : 'not-allowed', opacity: (connected && demoState !== 'active') ? 1 : 0.5,
                 boxShadow: recording ? '0 0 15px var(--threat-live)' : 'none',
                 transition: 'all 0.2s ease-in-out'
               }}
@@ -293,16 +342,16 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
               value={input}
               onChange={e => setInput(e.target.value)}
               placeholder="Or type here..."
-              disabled={!connected || demoState !== 'active'}
+              disabled={!connected || demoState === 'active'}
               style={{
                 flex: 1, background: 'var(--bg-tertiary)', border: '1px solid var(--border-subtle)',
                 color: 'var(--text-primary)', padding: '10px 14px', borderRadius: 6, outline: 'none',
-                opacity: demoState === 'active' ? 1 : 0.5
+                opacity: demoState === 'active' ? 0.5 : 1
               }}
             />
-            <button type="submit" disabled={!connected || demoState !== 'active'} style={{
+            <button type="submit" disabled={!connected || demoState === 'active'} style={{
               background: 'var(--accent)', color: '#000000', border: 'none', borderRadius: 6,
-              padding: '0 20px', fontWeight: 600, cursor: (connected && demoState === 'active') ? 'pointer' : 'not-allowed', opacity: (connected && demoState === 'active') ? 1 : 0.5,
+              padding: '0 20px', fontWeight: 600, cursor: (connected && demoState !== 'active') ? 'pointer' : 'not-allowed', opacity: (connected && demoState !== 'active') ? 1 : 0.5,
               height: 40
             }}>Send</button>
           </form>
