@@ -66,10 +66,28 @@ export default function Page() {
       ws.onmessage = event => {
         try {
           const data = JSON.parse(event.data);
-          if (data.type !== 'incident_created') return;
-          const incident = data.incident as Incident;
-          addIncident(incident);
-          addToast(`New ${SCAM_TYPES[incident.type]?.short ?? 'SCAM'} incident — ${incident.location.city}`, 'danger');
+          
+          if (data.type === 'incident_created') {
+            const incident = data.incident as Incident;
+            addIncident(incident);
+            addToast(`New ${SCAM_TYPES[incident.type]?.short ?? 'SCAM'} incident — ${incident.location.city}`, 'danger');
+          } 
+          else if (data.type === 'entity_extracted' && data.incident_id) {
+            setIncidents(prev => prev.map(inc => {
+              if (inc.id === data.incident_id) {
+                const newEnts = { ...inc.entities };
+                const t = data.entity.type;
+                const v = data.entity.value;
+                if (t === 'institution' || t === 'institution_name') newEnts.institution = v;
+                if (t === 'case_id') newEnts.caseId = v;
+                if (t === 'payment_method') newEnts.payment = v;
+                if (t === 'callback_number') newEnts.callback = v;
+                return { ...inc, entities: newEnts };
+              }
+              return inc;
+            }));
+            addToast(`Intel Extracted: ${data.entity.value}`, 'success');
+          }
         } catch (error) {
           console.warn('Ignored malformed WebSocket message:', error);
         }

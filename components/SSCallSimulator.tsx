@@ -15,7 +15,6 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
   const [input, setInput] = useState('');
   const [connected, setConnected] = useState(false);
   const [recording, setRecording] = useState(false);
-  const [botMode, setBotMode] = useState(false);
   
   const ws = useRef<WebSocket | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -26,107 +25,110 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
   const streamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   
-  // Bot logic
-  const botInterval = useRef<NodeJS.Timeout | null>(null);
-  const botScript = [
+  // Demo Logic
+  const [demoState, setDemoState] = useState<'idle'|'incoming'|'detected'|'intercepting'|'active'|'finished'>('idle');
+  const [incidentId, setIncidentId] = useState<string|null>(null);
+  
+  const demoScript = [
     "Hello, this is Richard from Amazon Customer Support. We detected a fraudulent charge of $499 on your account.",
-    "No ma'am, this is an urgent matter. You need to buy an Amazon Gift card to verify your identity.",
-    "Your case number is AZ-9942. Please go to the store immediately.",
-    "If you do not comply, we will have to suspend your account and contact local authorities."
+    "Yes ma'am, to cancel this charge and secure your account, we need you to purchase an Apple gift card.",
+    "Please write down your cancellation case number. It is AZ dash 9 9 4 2. Do you have that?",
+    "If you do not comply, we will have to suspend your account and contact local authorities immediately."
   ];
   const botStep = useRef(0);
 
-  useEffect(() => {
-    const wsUrl = (process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000').replace('http', 'ws') + '/ws/call';
-    ws.current = new WebSocket(wsUrl);
-    ws.current.binaryType = 'arraybuffer';
-
-    ws.current.onopen = () => {
-      setConnected(true);
-      setEvents([{ type: 'system', text: 'System: Call connected to Gemini Live Audio Agent. Click the Mic to speak, or enable Auto-Scammer.' }]);
-    };
-
-    ws.current.onmessage = async (event) => {
-      if (typeof event.data === 'string') {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'agent_response' || data.type === 'entity_extracted') {
-            setEvents((prev) => [...prev, data]);
-          }
-        } catch (e) {
-          console.error('Error parsing WS JSON message', e);
-        }
-      } else if (event.data instanceof ArrayBuffer) {
-        if (!audioContext.current) {
-          audioContext.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-        }
+  const startDemo = async () => {
+    setDemoState('incoming');
+    setEvents([]);
+    
+    const text1 = demoScript[0];
+    setEvents([{ type: 'bot', text: text1 }]);
+    
+    const utter = new SpeechSynthesisUtterance(text1);
+    utter.rate = 0.95; utter.pitch = 0.8;
+    
+    utter.onend = async () => {
+      setDemoState('detected');
+      setEvents(p => [...p, { type: 'system', text: '🚨 SPAM DETECTED: Financial Impersonation 🚨' }]);
+      
+      await new Promise(r => setTimeout(r, 1500));
+      
+      setDemoState('intercepting');
+      setEvents(p => [...p, { type: 'system', text: 'Routing to AI Decoy Agent...' }]);
+      
+      try {
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
+        const res = await fetch(`${backendUrl}/api/call/start?caller_city=Seattle&caller_country=US`, { method: 'POST' });
+        const data = await res.json();
+        const iId = data.id;
+        setIncidentId(iId);
         
-        const audioData = new Int16Array(event.data);
-        const floatData = new Float32Array(audioData.length);
-        for (let i = 0; i < audioData.length; i++) {
-          floatData[i] = audioData[i] / 32768.0;
-        }
+        const wsUrl = (process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000').replace('http', 'ws') + '/ws/call?incident_id=' + iId;
+        ws.current = new WebSocket(wsUrl);
+        ws.current.binaryType = 'arraybuffer';
+        
+        ws.current.onopen = () => {
+          setConnected(true);
+          setDemoState('active');
+          setEvents(p => [...p, { type: 'system', text: 'System: Intercept Successful. Decoy Active.' }]);
+          botStep.current = 1;
+          ws.current?.send(JSON.stringify({ type: 'text', text: text1 }));
+        };
+        
+        ws.current.onmessage = async (event) => {
+          if (typeof event.data === 'string') {
+            try {
+              const data = JSON.parse(event.data);
+              if (data.type === 'agent_response' || data.type === 'entity_extracted') {
+                setEvents((prev) => [...prev, data]);
+              } else if (data.type === 'turn_complete') {
+                if (botStep.current < demoScript.length && demoState !== 'finished') {
+                  const msg = demoScript[botStep.current];
+                  setEvents((prev) => [...prev, { type: 'bot', text: msg }]);
+                  
+                  const u2 = new SpeechSynthesisUtterance(msg);
+                  u2.rate = 0.95; u2.pitch = 0.8;
+                  u2.onend = () => {
+                     ws.current?.send(JSON.stringify({ type: 'text', text: msg }));
+                  };
+                  window.speechSynthesis.speak(u2);
+                  botStep.current += 1;
+                } else if (botStep.current >= demoScript.length) {
+                  setDemoState('finished');
+                  setEvents(p => [...p, { type: 'system', text: 'System: Simulation Complete.' }]);
+                }
+              }
+            } catch (e) { }
+          } else if (event.data instanceof ArrayBuffer) {
+            if (!audioContext.current) {
+              audioContext.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+            }
+            const audioData = new Int16Array(event.data);
+            const floatData = new Float32Array(audioData.length);
+            for (let i = 0; i < audioData.length; i++) floatData[i] = audioData[i] / 32768.0;
+            const buffer = audioContext.current.createBuffer(1, floatData.length, 24000);
+            buffer.copyToChannel(floatData, 0);
+            const source = audioContext.current.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioContext.current.destination);
+            const playTime = Math.max(audioContext.current.currentTime, nextPlayTime.current);
+            source.start(playTime);
+            nextPlayTime.current = playTime + buffer.duration;
+          }
+        };
 
-        const buffer = audioContext.current.createBuffer(1, floatData.length, 24000);
-        buffer.copyToChannel(floatData, 0);
+        ws.current.onclose = () => {
+          setConnected(false);
+          setDemoState('finished');
+        };
 
-        const source = audioContext.current.createBufferSource();
-        source.buffer = buffer;
-        source.connect(audioContext.current.destination);
-
-        const currentTime = audioContext.current.currentTime;
-        const playTime = Math.max(currentTime, nextPlayTime.current);
-        source.start(playTime);
-        nextPlayTime.current = playTime + buffer.duration;
+      } catch(e) {
+        console.error(e);
       }
     };
-
-    ws.current.onclose = () => {
-      setConnected(false);
-      setEvents((prev) => [...prev, { type: 'system', text: 'System: Call disconnected.' }]);
-      stopRecording();
-      if (botInterval.current) clearInterval(botInterval.current);
-    };
-
-    return () => {
-      ws.current?.close();
-      stopRecording();
-      if (botInterval.current) clearInterval(botInterval.current);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [events]);
-  
-  // Bot Auto-Scammer Logic
-  useEffect(() => {
-    if (botMode && connected) {
-      botInterval.current = setInterval(() => {
-        if (botStep.current < botScript.length) {
-          const msg = botScript[botStep.current];
-          setEvents((prev) => [...prev, { type: 'bot', text: msg }]);
-          ws.current?.send(JSON.stringify({ type: 'text', text: msg }));
-          
-          // Browser TTS for the bot
-          const utterance = new SpeechSynthesisUtterance(msg);
-          utterance.rate = 0.95;
-          utterance.pitch = 0.8;
-          window.speechSynthesis.speak(utterance);
-          
-          botStep.current += 1;
-        } else {
-          if (botInterval.current) clearInterval(botInterval.current);
-          setBotMode(false);
-        }
-      }, 8000); // Wait 8 seconds between bot messages to allow Decoy to reply
-    } else {
-      if (botInterval.current) clearInterval(botInterval.current);
-    }
-    return () => { if (botInterval.current) clearInterval(botInterval.current); };
-  }, [botMode, connected]);
+    
+    window.speechSynthesis.speak(utter);
+  };
 
   const startRecording = async () => {
     if (botMode) setBotMode(false); // Disable bot if manual recording
@@ -221,21 +223,17 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
             
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
               <button 
-                onClick={() => {
-                  botStep.current = 0;
-                  setBotMode(!botMode);
-                  if (recording) stopRecording();
-                }}
-                disabled={!connected}
+                onClick={startDemo}
+                disabled={demoState !== 'idle'}
                 style={{
-                  background: botMode ? 'var(--threat-live)' : 'transparent',
-                  color: botMode ? '#fff' : 'var(--text-secondary)',
+                  background: demoState !== 'idle' ? 'var(--bg-tertiary)' : 'var(--threat-live)',
+                  color: demoState !== 'idle' ? 'var(--text-tertiary)' : '#fff',
                   border: '1px solid var(--border-emphasis)', borderRadius: 6,
-                  padding: '4px 10px', fontSize: 12, fontWeight: 'bold', cursor: 'pointer',
-                  transition: 'all 0.2s'
+                  padding: '4px 10px', fontSize: 12, fontWeight: 'bold', cursor: demoState !== 'idle' ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s', boxShadow: demoState !== 'idle' ? 'none' : '0 0 10px var(--threat-live)'
                 }}
               >
-                {botMode ? 'Stop Auto-Scammer' : 'Run Auto-Scammer'}
+                {demoState === 'idle' ? 'Launch Hackathon Demo' : demoState.toUpperCase()}
               </button>
               <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: 20 }}>×</button>
             </div>
@@ -271,13 +269,13 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
             <button 
               type="button"
               onClick={toggleRecording} 
-              disabled={!connected || botMode} 
+              disabled={!connected || demoState !== 'active'} 
               style={{
                 width: 40, height: 40, borderRadius: '50%', border: 'none',
                 background: recording ? 'var(--threat-live)' : 'var(--bg-tertiary)', 
                 color: recording ? '#ffffff' : 'var(--text-primary)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: (connected && !botMode) ? 'pointer' : 'not-allowed', opacity: (connected && !botMode) ? 1 : 0.5,
+                cursor: (connected && demoState === 'active') ? 'pointer' : 'not-allowed', opacity: (connected && demoState === 'active') ? 1 : 0.5,
                 boxShadow: recording ? '0 0 15px var(--threat-live)' : 'none',
                 transition: 'all 0.2s ease-in-out'
               }}
@@ -295,16 +293,16 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
               value={input}
               onChange={e => setInput(e.target.value)}
               placeholder="Or type here..."
-              disabled={!connected || botMode}
+              disabled={!connected || demoState !== 'active'}
               style={{
                 flex: 1, background: 'var(--bg-tertiary)', border: '1px solid var(--border-subtle)',
                 color: 'var(--text-primary)', padding: '10px 14px', borderRadius: 6, outline: 'none',
-                opacity: botMode ? 0.5 : 1
+                opacity: demoState === 'active' ? 1 : 0.5
               }}
             />
-            <button type="submit" disabled={!connected || botMode} style={{
+            <button type="submit" disabled={!connected || demoState !== 'active'} style={{
               background: 'var(--accent)', color: '#000000', border: 'none', borderRadius: 6,
-              padding: '0 20px', fontWeight: 600, cursor: (connected && !botMode) ? 'pointer' : 'not-allowed', opacity: (connected && !botMode) ? 1 : 0.5,
+              padding: '0 20px', fontWeight: 600, cursor: (connected && demoState === 'active') ? 'pointer' : 'not-allowed', opacity: (connected && demoState === 'active') ? 1 : 0.5,
               height: 40
             }}>Send</button>
           </form>
