@@ -214,8 +214,9 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
     });
   };
 
-  // ── CACHED DEMO (Guaranteed to work without Gemini API) ──
-  const startDiagnosticDemo = async () => {
+  
+  // ── PRE-RECORDED FALLBACK DEMO ──
+  const startPrerecordedDemo = async () => {
     setDemoState('incoming');
     setEvents([]);
     isScammerSpeakingRef.current = true;
@@ -234,10 +235,33 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
       { type: 'agent_response', text: "Oh dear, my tea kettle is boiling over, I have to go now, goodbye!" }
     ];
 
+    let hasAudioFile = false;
+    const audio = new Audio('/demo.mp3');
+    try {
+      await audio.play();
+      hasAudioFile = true;
+    } catch (e) {
+      console.warn("No /demo.mp3 found, falling back to native browser TTS sync");
+      hasAudioFile = false;
+    }
+
     const initial = script[0];
     setEvents([{ type: 'bot', text: initial.text }]);
 
-    await playDeepgramTTS(initial.text!, 'aura-orion-en', async () => {
+    const playSync = (text: string, isBot: boolean, onEnd: () => void) => {
+      if (hasAudioFile) {
+        const words = text.split(' ').length;
+        setTimeout(onEnd, words * 380 + 400); // Estimate duration
+      } else {
+        const u = new SpeechSynthesisUtterance(text);
+        u.pitch = isBot ? 0.8 : 1.3;
+        u.rate = 0.95;
+        u.onend = onEnd;
+        window.speechSynthesis.speak(u);
+      }
+    };
+
+    playSync(initial.text!, true, async () => {
       setDemoState('detected');
       playSirenSound();
       setEvents(p => [...p, { type: 'system', text: '🚨 SPAM THREAT DETECTED: Financial Impersonation 🚨' }]);
@@ -249,18 +273,18 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
       try {
         const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
         await fetch(`${backendUrl}/api/call/start?caller_city=Seoul&caller_country=KR`, { method: 'POST' });
-      } catch(e) {} // Fails gracefully if backend is entirely dead
+      } catch(e) {} // Fails gracefully if backend is dead
 
       setConnected(true);
       setDemoState('active');
-      setEvents(p => [...p, { type: 'system', text: '> Intercept Successful. Decoy Active in Local Diagnostic Mode.' }]);
+      setEvents(p => [...p, { type: 'system', text: '> Intercept Successful. Decoy Active in Offline Mode.' }]);
 
       let stepIdx = 1;
       const playNext = async () => {
         if (stepIdx >= script.length) {
           setDemoState('finished');
           setConnected(false);
-          setEvents(p => [...p, { type: 'system', text: '> Call Terminated (Diagnostic complete).' }]);
+          setEvents(p => [...p, { type: 'system', text: '> Call Terminated (Intercept complete).' }]);
           return;
         }
         
@@ -269,19 +293,17 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
         
         if (step.type === 'entity_extracted') {
           setEvents(p => [...p, step as Event]);
-          setTimeout(playNext, 500); // Short delay for UI updates
+          setTimeout(playNext, 500); 
         } else {
-          await new Promise(r => setTimeout(r, 800)); // Natural breathing pause
+          await new Promise(r => setTimeout(r, 800)); // Natural pause
           setEvents(p => [...p, step as Event]);
-          const voice = step.type === 'bot' ? 'aura-orion-en' : 'aura-hera-en';
-          playDeepgramTTS(step.text!, voice, playNext);
+          playSync(step.text!, step.type === 'bot', playNext);
         }
       };
       
       playNext();
     });
   };
-
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -328,7 +350,7 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
             
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
               <button 
-                onClick={startDiagnosticDemo}
+                onClick={startPrerecordedDemo}
                 disabled={demoState !== 'idle'}
                 style={{
                   background: 'transparent',
@@ -337,9 +359,9 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
                   padding: '4px 6px', fontSize: 10, fontWeight: 'bold', cursor: demoState !== 'idle' ? 'default' : 'pointer',
                   opacity: demoState !== 'idle' ? 0 : 0.5, transition: 'all 0.2s',
                 }}
-                title="Run Local Diagnostic Sequence (Offline Fallback)"
+                title="Run Pre-recorded Audio Sequence"
               >
-                SYS-CHK
+                SEQ-01
               </button>
               <button 
                 onClick={startDemo}
