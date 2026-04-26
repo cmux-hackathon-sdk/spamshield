@@ -47,14 +47,22 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
         body: JSON.stringify({ text })
       });
       if (!res.ok) throw new Error('Deepgram HTTP error');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      audio.onended = () => {
-        onEnd();
-        URL.revokeObjectURL(url);
+      const arrayBuffer = await res.arrayBuffer();
+      
+      if (!audioContext.current) {
+         audioContext.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      }
+      
+      const audioBuffer = await audioContext.current.decodeAudioData(arrayBuffer);
+      const source = audioContext.current.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioContext.current.destination);
+      
+      source.onended = () => {
+         onEnd();
       };
-      audio.play();
+      
+      source.start();
     } catch (e) {
       console.error("Deepgram TTS error", e);
       onEnd();
