@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 interface Event {
-  type: 'agent_response' | 'entity_extracted' | 'user' | 'system';
+  type: 'agent_response' | 'entity_extracted' | 'user' | 'system' | 'bot';
   text?: string;
   entity?: {
     type: string;
@@ -15,6 +15,7 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
   const [input, setInput] = useState('');
   const [connected, setConnected] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [botMode, setBotMode] = useState(false);
   
   const ws = useRef<WebSocket | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -24,6 +25,16 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
   const nextPlayTime = useRef(0);
   const streamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
+  
+  // Bot logic
+  const botInterval = useRef<NodeJS.Timeout | null>(null);
+  const botScript = [
+    "Hello, this is Richard from Amazon Customer Support. We detected a fraudulent charge of $499 on your account.",
+    "No ma'am, this is an urgent matter. You need to buy an Amazon Gift card to verify your identity.",
+    "Your case number is AZ-9942. Please go to the store immediately.",
+    "If you do not comply, we will have to suspend your account and contact local authorities."
+  ];
+  const botStep = useRef(0);
 
   useEffect(() => {
     const wsUrl = (process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000').replace('http', 'ws') + '/ws/call';
@@ -32,7 +43,7 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
 
     ws.current.onopen = () => {
       setConnected(true);
-      setEvents([{ type: 'system', text: 'System: Call connected to Gemini Live Audio Agent. Click the Mic icon to speak.' }]);
+      setEvents([{ type: 'system', text: 'System: Call connected to Gemini Live Audio Agent. Click the Mic to speak, or enable Auto-Scammer.' }]);
     };
 
     ws.current.onmessage = async (event) => {
@@ -46,7 +57,6 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
           console.error('Error parsing WS JSON message', e);
         }
       } else if (event.data instanceof ArrayBuffer) {
-        // Playback incoming 24kHz PCM audio
         if (!audioContext.current) {
           audioContext.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
         }
@@ -75,11 +85,13 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
       setConnected(false);
       setEvents((prev) => [...prev, { type: 'system', text: 'System: Call disconnected.' }]);
       stopRecording();
+      if (botInterval.current) clearInterval(botInterval.current);
     };
 
     return () => {
       ws.current?.close();
       stopRecording();
+      if (botInterval.current) clearInterval(botInterval.current);
     };
   }, []);
 
@@ -88,15 +100,42 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [events]);
+  
+  // Bot Auto-Scammer Logic
+  useEffect(() => {
+    if (botMode && connected) {
+      botInterval.current = setInterval(() => {
+        if (botStep.current < botScript.length) {
+          const msg = botScript[botStep.current];
+          setEvents((prev) => [...prev, { type: 'bot', text: msg }]);
+          ws.current?.send(JSON.stringify({ type: 'text', text: msg }));
+          
+          // Browser TTS for the bot
+          const utterance = new SpeechSynthesisUtterance(msg);
+          utterance.rate = 0.95;
+          utterance.pitch = 0.8;
+          window.speechSynthesis.speak(utterance);
+          
+          botStep.current += 1;
+        } else {
+          if (botInterval.current) clearInterval(botInterval.current);
+          setBotMode(false);
+        }
+      }, 8000); // Wait 8 seconds between bot messages to allow Decoy to reply
+    } else {
+      if (botInterval.current) clearInterval(botInterval.current);
+    }
+    return () => { if (botInterval.current) clearInterval(botInterval.current); };
+  }, [botMode, connected]);
 
   const startRecording = async () => {
+    if (botMode) setBotMode(false); // Disable bot if manual recording
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       
       const context = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       const source = context.createMediaStreamSource(stream);
-      // Deprecated but widely supported without requiring external worker files
       const processor = context.createScriptProcessor(4096, 1, 1);
       processorRef.current = processor;
 
@@ -114,7 +153,6 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
       processor.connect(context.destination);
       setRecording(true);
       
-      // Initialize playback context on user gesture
       if (!audioContext.current) {
         audioContext.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       } else if (audioContext.current.state === 'suspended') {
@@ -122,7 +160,7 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
       }
     } catch (err) {
       console.error('Failed to get user media', err);
-      alert("Microphone access denied or not available.");
+      alert("Microphone access denied.");
     }
   };
 
@@ -180,7 +218,27 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
               <div style={{ width: 10, height: 10, borderRadius: '50%', background: connected ? 'var(--threat-low)' : 'var(--threat-critical)' }} />
               <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>Live Audio Intercept</span>
             </div>
-            <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: 20 }}>×</button>
+            
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+              <button 
+                onClick={() => {
+                  botStep.current = 0;
+                  setBotMode(!botMode);
+                  if (recording) stopRecording();
+                }}
+                disabled={!connected}
+                style={{
+                  background: botMode ? 'var(--threat-live)' : 'transparent',
+                  color: botMode ? '#fff' : 'var(--text-secondary)',
+                  border: '1px solid var(--border-emphasis)', borderRadius: 6,
+                  padding: '4px 10px', fontSize: 12, fontWeight: 'bold', cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                {botMode ? 'Stop Auto-Scammer' : 'Run Auto-Scammer'}
+              </button>
+              <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: 20 }}>×</button>
+            </div>
           </div>
 
           <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -190,14 +248,14 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
                 <div key={i} style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 12, fontStyle: 'italic', margin: '10px 0' }}>{ev.text}</div>
               );
               
-              const isUser = ev.type === 'user';
+              const isUser = ev.type === 'user' || ev.type === 'bot';
               return (
                 <div key={i} style={{ alignSelf: isUser ? 'flex-end' : 'flex-start', maxWidth: '80%' }}>
                   <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 4, textAlign: isUser ? 'right' : 'left' }}>
-                    {isUser ? 'You (Scammer)' : 'Decoy Agent'}
+                    {isUser ? (ev.type === 'bot' ? 'Auto-Scammer Bot' : 'You (Scammer)') : 'Decoy Agent'}
                   </div>
                   <div style={{
-                    background: isUser ? 'var(--accent)' : 'var(--bg-tertiary)',
+                    background: isUser ? (ev.type === 'bot' ? '#f97316' : 'var(--accent)') : 'var(--bg-tertiary)',
                     color: isUser ? '#000000' : 'var(--text-primary)',
                     padding: '10px 14px', borderRadius: 8, fontSize: 14,
                     border: isUser ? 'none' : '1px solid var(--border-subtle)'
@@ -213,13 +271,13 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
             <button 
               type="button"
               onClick={toggleRecording} 
-              disabled={!connected} 
+              disabled={!connected || botMode} 
               style={{
                 width: 40, height: 40, borderRadius: '50%', border: 'none',
                 background: recording ? 'var(--threat-live)' : 'var(--bg-tertiary)', 
                 color: recording ? '#ffffff' : 'var(--text-primary)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: connected ? 'pointer' : 'not-allowed', opacity: connected ? 1 : 0.5,
+                cursor: (connected && !botMode) ? 'pointer' : 'not-allowed', opacity: (connected && !botMode) ? 1 : 0.5,
                 boxShadow: recording ? '0 0 15px var(--threat-live)' : 'none',
                 transition: 'all 0.2s ease-in-out'
               }}
@@ -237,15 +295,16 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
               value={input}
               onChange={e => setInput(e.target.value)}
               placeholder="Or type here..."
-              disabled={!connected}
+              disabled={!connected || botMode}
               style={{
                 flex: 1, background: 'var(--bg-tertiary)', border: '1px solid var(--border-subtle)',
-                color: 'var(--text-primary)', padding: '10px 14px', borderRadius: 6, outline: 'none'
+                color: 'var(--text-primary)', padding: '10px 14px', borderRadius: 6, outline: 'none',
+                opacity: botMode ? 0.5 : 1
               }}
             />
-            <button type="submit" disabled={!connected} style={{
+            <button type="submit" disabled={!connected || botMode} style={{
               background: 'var(--accent)', color: '#000000', border: 'none', borderRadius: 6,
-              padding: '0 20px', fontWeight: 600, cursor: connected ? 'pointer' : 'not-allowed', opacity: connected ? 1 : 0.5,
+              padding: '0 20px', fontWeight: 600, cursor: (connected && !botMode) ? 'pointer' : 'not-allowed', opacity: (connected && !botMode) ? 1 : 0.5,
               height: 40
             }}>Send</button>
           </form>
