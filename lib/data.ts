@@ -16,7 +16,8 @@ export const LAYER_DEFINITIONS: LayerDefinition[] = [
   { id: 'tech',     label: 'Tech Support Scam',     color: '#eab308', enabled: true },
   { id: 'delivery', label: 'Delivery Scam',         color: '#3b82f6', enabled: true },
   { id: 'romance',  label: 'Romance Scam',           color: '#ec4899', enabled: true },
-  { id: 'job',      label: 'Job Scam',              color: '#8b5cf6', enabled: false },
+  { id: 'job',      label: 'Job Scam',              color: '#8b5cf6', enabled: true },
+  { id: 'unknown',  label: 'Unclassified',          color: '#64748b', enabled: true },
 ];
 
 export const MOCK_INCIDENTS: Incident[] = [
