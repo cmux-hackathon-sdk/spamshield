@@ -168,7 +168,7 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
         const iId = data.id;
         setIncidentId(iId);
 
-        const wsUrl = (process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000').replace('http', 'ws') + '/ws/call?incident_id=' + iId;
+        const wsUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000').replace('http', 'ws') + '/ws/call?incident_id=' + iId;
         ws.current = new WebSocket(wsUrl);
         ws.current.binaryType = 'arraybuffer';
 
