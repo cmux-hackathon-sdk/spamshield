@@ -18,6 +18,8 @@ const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
 
 export function SSMap({ incidents, layers, onSelectIncident, selectedId, timeRange }: SSMapProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [alertIncident, setAlertIncident] = useState<Incident | null>(null);
+  const lastAlertedId = useRef<string | null>(null);
   const mapRef = useRef<MapRef>(null);
 
   const enabledTypes = new Set(layers.filter(l => l.enabled).map(l => l.id));
@@ -36,8 +38,10 @@ export function SSMap({ incidents, layers, onSelectIncident, selectedId, timeRan
     
     // Determine the focus target: selected incident or the newest live incident
     let target = selectedId ? visibleIncidents.find(i => i.id === selectedId) : null;
+    let isAutoFly = false;
     if (!target) {
       target = visibleIncidents.find(i => i.status === 'live');
+      isAutoFly = true;
     }
 
     if (target) {
@@ -48,6 +52,13 @@ export function SSMap({ incidents, layers, onSelectIncident, selectedId, timeRan
         curve: 1,
         essential: true,
       });
+
+      if (isAutoFly && target.status === 'live' && target.id !== lastAlertedId.current) {
+         lastAlertedId.current = target.id;
+         setAlertIncident(target);
+         const tm = setTimeout(() => setAlertIncident(null), 5000);
+         return () => clearTimeout(tm);
+      }
     }
   }, [selectedId, visibleIncidents]);
 
@@ -214,10 +225,34 @@ export function SSMap({ incidents, layers, onSelectIncident, selectedId, timeRan
           </div>
         ))}
       </div>
+
+      {alertIncident && (
+        <div style={{
+          position: 'absolute', top: 60, left: '50%', transform: 'translateX(-50%)', zIndex: 50,
+          background: 'rgba(220, 38, 38, 0.15)', border: '1px solid var(--threat-critical)',
+          borderRadius: 8, padding: '16px 24px', backdropFilter: 'blur(10px)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+          boxShadow: '0 0 40px rgba(220, 38, 38, 0.4)', animation: 'flashOverlay 1s ease-in-out infinite alternate'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 12, height: 12, borderRadius: '50%', background: 'var(--threat-critical)', boxShadow: '0 0 10px var(--threat-critical)' }} />
+            <span style={{ color: 'var(--threat-critical)', fontWeight: 800, fontSize: 18, letterSpacing: '0.1em' }}>NEW INCIDENT DETECTED</span>
+            <div style={{ width: 12, height: 12, borderRadius: '50%', background: 'var(--threat-critical)', boxShadow: '0 0 10px var(--threat-critical)' }} />
+          </div>
+          <div style={{ color: '#fff', fontSize: 14, fontWeight: 600, letterSpacing: '0.05em' }}>
+            {alertIncident.location.city}, {alertIncident.location.country}
+          </div>
+        </div>
+      )}
+
       <style>{`
         @keyframes markerPulse {
           0% { width: 12px; height: 12px; opacity: 1; }
           100% { width: 40px; height: 40px; opacity: 0; }
+        }
+        @keyframes flashOverlay {
+          0% { background: rgba(220, 38, 38, 0.15); box-shadow: 0 0 20px rgba(220, 38, 38, 0.3); }
+          100% { background: rgba(220, 38, 38, 0.4); box-shadow: 0 0 50px rgba(220, 38, 38, 0.7); }
         }
         .mapboxgl-popup-content {
           background: #111111;
