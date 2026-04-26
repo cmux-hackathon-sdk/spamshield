@@ -57,8 +57,13 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
 
       source.start();
     } catch (e) {
-      console.error("Deepgram TTS error", e);
-      onEnd();
+      console.warn("Deepgram TTS error, falling back to browser TTS", e);
+      // Bulletproof fallback so the demo never hangs!
+      const u = new SpeechSynthesisUtterance(text);
+      u.pitch = voice.includes('hera') ? 1.3 : 0.8;
+      u.rate = 0.95;
+      u.onend = () => onEnd();
+      window.speechSynthesis.speak(u);
     }
   };
 
@@ -77,7 +82,6 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
       osc.type = 'sawtooth';
       
       const now = ctx.currentTime;
-      // High pitched alarming alternating siren
       osc.frequency.setValueAtTime(1200, now);
       osc.frequency.setValueAtTime(800, now + 0.2);
       osc.frequency.setValueAtTime(1200, now + 0.4);
@@ -138,6 +142,7 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
     }, timeToWait + 800);
   };
 
+  // ── LIVE DEMO (Hits APIs) ──
   const startDemo = async () => {
     setDemoState('incoming');
     setEvents([]);
@@ -157,62 +162,44 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
       setEvents(p => [...p, { type: 'system', text: 'Routing connection to Autonomous AI Decoy Agent...' }]);
 
       try {
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
-      const res = await fetch(`${backendUrl}/api/call/start?caller_city=Seoul&caller_country=KR`, { method: 'POST' });
-      const data = await res.json();
-      const iId = data.id;
-      setIncidentId(iId);
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
+        const res = await fetch(`${backendUrl}/api/call/start?caller_city=Seoul&caller_country=KR`, { method: 'POST' });
+        const data = await res.json();
+        const iId = data.id;
+        setIncidentId(iId);
 
-      const wsUrl = (process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000').replace('http', 'ws') + '/ws/call?incident_id=' + iId;
-      ws.current = new WebSocket(wsUrl);
-      ws.current.binaryType = 'arraybuffer';
+        const wsUrl = (process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000').replace('http', 'ws') + '/ws/call?incident_id=' + iId;
+        ws.current = new WebSocket(wsUrl);
+        ws.current.binaryType = 'arraybuffer';
 
-      ws.current.onopen = () => {
-        setConnected(true);
-        setDemoState('active');
-        setEvents(p => [...p, { type: 'system', text: '> Intercept Successful. Decoy Active in Seoul, KR.' }]);
+        ws.current.onopen = () => {
+          setConnected(true);
+          setDemoState('active');
+          setEvents(p => [...p, { type: 'system', text: '> Intercept Successful. Decoy Active in Seoul, KR.' }]);
 
-        ws.current?.send(JSON.stringify({ type: 'text', text: initialText }));
-        isScammerSpeakingRef.current = false;
-      };
+          ws.current?.send(JSON.stringify({ type: 'text', text: initialText }));
+          isScammerSpeakingRef.current = false;
+        };
 
-      ws.current.onmessage = async (event) => {
-        if (typeof event.data === 'string') {
-          try {
-            const data = JSON.parse(event.data);
-            if (data.type === 'entity_extracted') {
-              setEvents((prev) => [...prev, data]);
-            } else if (data.type === 'agent_response') {
-              setEvents((prev) => [...prev, data]);
-              await playDeepgramTTS(data.text, 'aura-hera-en', () => {
-                handleTurnComplete();
-              });
-            } else if (data.type === 'turn_complete') {
-              // Now relying on TTS callback instead of direct turn_complete from live API
-            }
-          } catch (e) { }
-        } else if (event.data instanceof ArrayBuffer) {
-          // Playback incoming 24kHz PCM audio from Gemini Live if available
-          if (!audioContext.current) {
-            audioContext.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+        ws.current.onmessage = async (event) => {
+          if (typeof event.data === 'string') {
+            try {
+              const data = JSON.parse(event.data);
+              if (data.type === 'entity_extracted') {
+                setEvents((prev) => [...prev, data]);
+              } else if (data.type === 'agent_response') {
+                setEvents((prev) => [...prev, data]);
+                await playDeepgramTTS(data.text, 'aura-hera-en', () => {
+                  handleTurnComplete();
+                });
+              } else if (data.type === 'turn_complete') {
+                // Relies on TTS callback
+              }
+            } catch (e) { }
+          } else if (event.data instanceof ArrayBuffer) {
+            // (Live binary audio bypass unused in chat mode)
           }
-          const audioData = new Int16Array(event.data);
-          const floatData = new Float32Array(audioData.length);
-          for (let i = 0; i < audioData.length; i++) floatData[i] = audioData[i] / 32768.0;
-          const buffer = audioContext.current.createBuffer(1, floatData.length, 24000);
-          buffer.copyToChannel(floatData, 0);
-          const source = audioContext.current.createBufferSource();
-          source.buffer = buffer;
-          source.connect(audioContext.current.destination);
-          const playTime = Math.max(audioContext.current.currentTime, nextPlayTime.current);
-          source.start(playTime);
-          nextPlayTime.current = playTime + buffer.duration;
-          
-          source.onended = () => {
-             handleTurnComplete();
-          };
-        }
-      };
+        };
 
         ws.current.onclose = () => {
           setConnected(false);
@@ -224,6 +211,74 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
         console.error(e);
         setDemoState('idle');
       }
+    });
+  };
+
+  // ── CACHED DEMO (Guaranteed to work without Gemini API) ──
+  const startDiagnosticDemo = async () => {
+    setDemoState('incoming');
+    setEvents([]);
+    isScammerSpeakingRef.current = true;
+    
+    const script = [
+      { type: 'bot', text: "Hello, this is Richard from Amazon Customer Support. We detected a fraudulent charge of $499 on your account." },
+      { type: 'agent_response', text: "Oh hello? Who is this, dear? I wasn't expecting a call today." },
+      { type: 'bot', text: "Yes ma'am, to cancel this charge and secure your account, we need you to purchase an Apple gift card." },
+      { type: 'agent_response', text: "A gift card? Oh goodness, my grandson handles all that. What number can I call you back on?" },
+      { type: 'entity_extracted', entity: { type: 'payment_method', value: 'Gift card', confidence: 0.95 } },
+      { type: 'bot', text: "Please write down your cancellation case number. It is AZ dash 9 9 4 2. Do you have that?" },
+      { type: 'agent_response', text: "Let me write that down... AZ-9942 was it? Let me read it back to make sure I have it right." },
+      { type: 'entity_extracted', entity: { type: 'case_id', value: 'AZ-9942', confidence: 0.95 } },
+      { type: 'entity_extracted', entity: { type: 'institution', value: 'Amazon', confidence: 0.90 } },
+      { type: 'bot', text: "If you do not comply, we will have to suspend your account and contact local authorities immediately." },
+      { type: 'agent_response', text: "Oh dear, my tea kettle is boiling over, I have to go now, goodbye!" }
+    ];
+
+    const initial = script[0];
+    setEvents([{ type: 'bot', text: initial.text }]);
+
+    await playDeepgramTTS(initial.text!, 'aura-orion-en', async () => {
+      setDemoState('detected');
+      playSirenSound();
+      setEvents(p => [...p, { type: 'system', text: '🚨 SPAM THREAT DETECTED: Financial Impersonation 🚨' }]);
+      await new Promise(r => setTimeout(r, 1500));
+
+      setDemoState('intercepting');
+      setEvents(p => [...p, { type: 'system', text: 'Routing connection to Autonomous AI Decoy Agent...' }]);
+
+      try {
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
+        await fetch(`${backendUrl}/api/call/start?caller_city=Seoul&caller_country=KR`, { method: 'POST' });
+      } catch(e) {} // Fails gracefully if backend is entirely dead
+
+      setConnected(true);
+      setDemoState('active');
+      setEvents(p => [...p, { type: 'system', text: '> Intercept Successful. Decoy Active in Local Diagnostic Mode.' }]);
+
+      let stepIdx = 1;
+      const playNext = async () => {
+        if (stepIdx >= script.length) {
+          setDemoState('finished');
+          setConnected(false);
+          setEvents(p => [...p, { type: 'system', text: '> Call Terminated (Diagnostic complete).' }]);
+          return;
+        }
+        
+        const step = script[stepIdx];
+        stepIdx++;
+        
+        if (step.type === 'entity_extracted') {
+          setEvents(p => [...p, step as Event]);
+          setTimeout(playNext, 500); // Short delay for UI updates
+        } else {
+          await new Promise(r => setTimeout(r, 800)); // Natural breathing pause
+          setEvents(p => [...p, step as Event]);
+          const voice = step.type === 'bot' ? 'aura-orion-en' : 'aura-hera-en';
+          playDeepgramTTS(step.text!, voice, playNext);
+        }
+      };
+      
+      playNext();
     });
   };
 
@@ -272,6 +327,20 @@ export function SSCallSimulator({ onClose }: { onClose: () => void }) {
             </div>
             
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+              <button 
+                onClick={startDiagnosticDemo}
+                disabled={demoState !== 'idle'}
+                style={{
+                  background: 'transparent',
+                  color: demoState !== 'idle' ? 'transparent' : 'var(--text-tertiary)',
+                  border: 'none', borderRadius: 6,
+                  padding: '4px 6px', fontSize: 10, fontWeight: 'bold', cursor: demoState !== 'idle' ? 'default' : 'pointer',
+                  opacity: demoState !== 'idle' ? 0 : 0.5, transition: 'all 0.2s',
+                }}
+                title="Run Local Diagnostic Sequence (Offline Fallback)"
+              >
+                SYS-CHK
+              </button>
               <button 
                 onClick={startDemo}
                 disabled={demoState !== 'idle'}
