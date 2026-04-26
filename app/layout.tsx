@@ -12,8 +12,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" style={{ height: "100%", overflow: "hidden" }}>
-      <body className={inter.className} style={{ height: "100%", overflow: "hidden", margin: 0 }}>
+    <html lang="en" style={{ height: "100%", overflow: "auto" }}>
+      <body className={inter.className} style={{ height: "100%", overflow: "auto", margin: 0 }}>
         <AuthProvider>
           {children}
         </AuthProvider>

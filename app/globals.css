@@ -20,7 +20,7 @@
   --threat-live: #dc2626;
 }
 
-html, body { height: 100%; overflow: hidden; }
+html, body { height: 100%; overflow: auto; }
 
 body {
   background: var(--bg-primary);
