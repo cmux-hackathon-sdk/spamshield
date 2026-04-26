@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import Map, { Marker, NavigationControl, Popup } from 'react-map-gl';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import Map, { Marker, NavigationControl, Popup, MapRef, Source, Layer } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { SCAM_TYPES } from '@/lib/data';
 import type { Incident, LayerDefinition } from '@/lib/types';
@@ -18,6 +18,7 @@ const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
 
 export function SSMap({ incidents, layers, onSelectIncident, selectedId, timeRange }: SSMapProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const mapRef = useRef<MapRef>(null);
 
   const enabledTypes = new Set(layers.filter(l => l.enabled).map(l => l.id));
   const now = Date.now();
@@ -29,6 +30,55 @@ export function SSMap({ incidents, layers, onSelectIncident, selectedId, timeRan
       enabledTypes.has(i.type) && (now - i.timestamp) < cutoff
     );
   }, [incidents, enabledTypes, now, cutoff]);
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+    
+    // Determine the focus target: selected incident or the newest live incident
+    let target = selectedId ? visibleIncidents.find(i => i.id === selectedId) : null;
+    if (!target) {
+      target = visibleIncidents.find(i => i.status === 'live');
+    }
+
+    if (target) {
+      mapRef.current.flyTo({
+        center: [target.location.lng, target.location.lat],
+        zoom: 4,
+        speed: 0.8,
+        curve: 1,
+        essential: true,
+      });
+    }
+  }, [selectedId, visibleIncidents]);
+
+  const countryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    visibleIncidents.forEach(inc => {
+      counts[inc.location.countryCode] = (counts[inc.location.countryCode] || 0) + 1;
+    });
+    return counts;
+  }, [visibleIncidents]);
+
+  const fillPaint = useMemo(() => {
+    const matchExpr: any[] = ['match', ['get', 'iso_a2']];
+    let hasEntries = false;
+    for (const [code, count] of Object.entries(countryCounts)) {
+      if (count > 0) {
+        matchExpr.push(code);
+        if (count >= 10) matchExpr.push('#ef4444');
+        else if (count >= 5) matchExpr.push('#f97316');
+        else if (count >= 2) matchExpr.push('#eab308');
+        else matchExpr.push('#3b82f6');
+        hasEntries = true;
+      }
+    }
+    matchExpr.push('transparent'); // default color
+    
+    return {
+      'fill-color': hasEntries ? matchExpr : 'transparent',
+      'fill-opacity': 0.15
+    };
+  }, [countryCounts]);
 
   function getMarkerColor(incident: Incident): string {
     return SCAM_TYPES[incident.type]?.color ?? 'var(--text-tertiary)';
@@ -46,6 +96,7 @@ export function SSMap({ incidents, layers, onSelectIncident, selectedId, timeRan
   return (
     <div style={{ flex: 1, position: 'relative', background: '#050505', width: '100%', height: '100%' }}>
       <Map
+        ref={mapRef}
         mapboxAccessToken={MAPBOX_TOKEN}
         initialViewState={{
           longitude: 0,
@@ -58,6 +109,14 @@ export function SSMap({ incidents, layers, onSelectIncident, selectedId, timeRan
       >
         <NavigationControl position="top-right" />
         
+        <Source id="countries" type="geojson" data="https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_50m_admin_0_countries.geojson">
+          <Layer
+            id="country-fills"
+            type="fill"
+            paint={fillPaint as any}
+          />
+        </Source>
+
         {visibleIncidents.map(incident => {
           const color = getMarkerColor(incident);
           const opacity = getMarkerOpacity(incident);
