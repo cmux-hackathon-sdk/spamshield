@@ -19,6 +19,7 @@ const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
 export function SSMap({ incidents, layers, onSelectIncident, selectedId, timeRange }: SSMapProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [alertIncident, setAlertIncident] = useState<Incident | null>(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
   const lastAlertedId = useRef<string | null>(null);
   const mapRef = useRef<MapRef>(null);
 
@@ -34,7 +35,7 @@ export function SSMap({ incidents, layers, onSelectIncident, selectedId, timeRan
   }, [incidents, enabledTypes, now, cutoff]);
 
   useEffect(() => {
-    if (!mapRef.current) return;
+    if (!mapRef.current || !mapLoaded) return;
     
     // Determine the focus target: selected incident or the newest live incident
     let target = selectedId ? visibleIncidents.find(i => i.id === selectedId) : null;
@@ -56,11 +57,11 @@ export function SSMap({ incidents, layers, onSelectIncident, selectedId, timeRan
       if (isAutoFly && target.status === 'live' && target.id !== lastAlertedId.current) {
          lastAlertedId.current = target.id;
          setAlertIncident(target);
-         const tm = setTimeout(() => setAlertIncident(null), 5000);
+         const tm = setTimeout(() => setAlertIncident(null), 30000);
          return () => clearTimeout(tm);
       }
     }
-  }, [selectedId, visibleIncidents]);
+  }, [selectedId, visibleIncidents, mapLoaded]);
 
   const countryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -114,6 +115,7 @@ export function SSMap({ incidents, layers, onSelectIncident, selectedId, timeRan
           latitude: 20,
           zoom: 1.5
         }}
+        onLoad={() => setMapLoaded(true)}
         style={{ width: '100%', height: '100%' }}
         mapStyle="mapbox://styles/mapbox/dark-v11"
         attributionControl={false}

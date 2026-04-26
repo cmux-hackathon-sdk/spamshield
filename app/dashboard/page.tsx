@@ -17,7 +17,7 @@ type View = 'map' | 'list';
 type Modal = 'le' | 'settings' | 'help' | 'simulator' | null;
 
 export default function Page() {
-  const [incidents, setIncidents] = useState<Incident[]>([...MOCK_INCIDENTS]);
+  const [incidents, setIncidents] = useState<Incident[]>([]);
   const [layers, setLayers] = useState<LayerDefinition[]>([...LAYER_DEFINITIONS]);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
   const [timeRange, setTimeRange] = useState('All');
