@@ -32,130 +32,145 @@ function ModalShell({ title, onClose, children, width = 560 }: { title: string; 
 /* ─── LE Portal ─── */
 export function SSLEPortal({ incidents, onClose, onToast }: { incidents: Incident[]; onClose: () => void; onToast: (msg: string, v?: ToastVariant) => void }) {
   const [filter, setFilter] = useState({ country: '', type: '', risk: '' });
-  const [sort, setSort] = useState({ col: 'risk', dir: -1 });
   const [selected, setSelected] = useState(new Set<string>());
   const [page, setPage] = useState(1);
-  const PER_PAGE = 8;
+  const [viewingDetail, setViewingDetail] = useState<Incident | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const PER_PAGE = 6;
 
-  const filtered = incidents
-    .filter(i => {
-      if (filter.country && !i.location.country.toLowerCase().includes(filter.country.toLowerCase())) return false;
-      if (filter.type && i.type !== filter.type) return false;
-      if (filter.risk === 'high' && i.risk < 80) return false;
-      if (filter.risk === 'elevated' && (i.risk < 60 || i.risk >= 80)) return false;
-      if (filter.risk === 'moderate' && (i.risk < 40 || i.risk >= 60)) return false;
-      return true;
-    })
-    .sort((a, b) => {
-      if (sort.col === 'risk') return (a.risk - b.risk) * sort.dir;
-      if (sort.col === 'date') return (a.timestamp - b.timestamp) * sort.dir;
-      if (sort.col === 'country') return a.location.country.localeCompare(b.location.country) * sort.dir;
-      return 0;
-    });
+  const filtered = incidents.filter(i => {
+    if (filter.country && !i.location.country.toLowerCase().includes(filter.country.toLowerCase())) return false;
+    if (filter.type && i.type !== filter.type) return false;
+    if (filter.risk === 'high' && i.risk < 80) return false;
+    return true;
+  }).sort((a, b) => b.risk - a.risk);
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
-  function toggleSelect(id: string) {
-    setSelected(s => { const ns = new Set(s); ns.has(id) ? ns.delete(id) : ns.add(id); return ns; });
-  }
-  function toggleAll() {
-    setSelected(selected.size === paged.length ? new Set() : new Set(paged.map(i => i.id)));
-  }
-  function handleSort(col: string) {
-    setSort(s => s.col === col ? { col, dir: s.dir * -1 } : { col, dir: -1 });
+  function handleSubmitToAgency() {
+    setSubmitting(true);
+    setTimeout(() => {
+      setSubmitting(false);
+      onToast(`Successfully forwarded ${selected.size} case files to partner agencies.`, 'success');
+      setSelected(new Set());
+    }, 1500);
   }
 
-  const SortIcon = ({ col }: { col: string }) => (
-    <span style={{ marginLeft: 4, opacity: sort.col === col ? 1 : 0.3 }}>
-      {sort.col === col && sort.dir === -1 ? '↓' : '↑'}
-    </span>
-  );
+  if (viewingDetail) {
+    return (
+      <ModalShell title={`Case File: ${viewingDetail.entities?.caseId || viewingDetail.id.toUpperCase()}`} onClose={() => setViewingDetail(null)} width={860}>
+        <div style={{ display: 'flex', gap: 20, marginBottom: 20 }}>
+          <div style={{ flex: 1, background: 'var(--bg-secondary)', border: '1px solid var(--border-emphasis)', borderRadius: 8, padding: 20 }}>
+            <h4 style={{ margin: 0, color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>Case Metadata</h4>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 20px' }}>
+              <div>
+                <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Origin Number</div>
+                <div style={{ fontSize: 14, color: 'var(--text-primary)', fontFamily: 'monospace' }}>{viewingDetail.caller}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Location Vector</div>
+                <div style={{ fontSize: 14, color: 'var(--text-primary)' }}>{viewingDetail.location.city}, {viewingDetail.location.countryCode}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Threat Classification</div>
+                <div style={{ fontSize: 14, color: SCAM_TYPES[viewingDetail.type]?.color }}>{SCAM_TYPES[viewingDetail.type]?.label}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Confidence Score</div>
+                <div style={{ fontSize: 14, color: 'var(--threat-live)', fontWeight: 'bold' }}>{viewingDetail.confidence}%</div>
+              </div>
+            </div>
+            
+            <h4 style={{ margin: '24px 0 12px 0', color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Extracted Intel</h4>
+            <div style={{ background: 'var(--bg-tertiary)', borderRadius: 6, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {Object.entries(viewingDetail.entities).map(([k, v]) => v ? (
+                <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                  <span style={{ color: 'var(--text-tertiary)', textTransform: 'capitalize' }}>{k.replace(/([A-Z])/g, ' $1').trim()}:</span>
+                  <span style={{ color: 'var(--text-primary)', fontFamily: 'monospace' }}>{v as string}</span>
+                </div>
+              ) : null)}
+            </div>
+          </div>
+          
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
+             <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-emphasis)', borderRadius: 8, padding: 20, flex: 1 }}>
+                <h4 style={{ margin: 0, color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>Evidence Transcript</h4>
+                <div style={{ color: 'var(--text-primary)', fontSize: 13, lineHeight: 1.6, fontStyle: 'italic', background: 'var(--bg-tertiary)', padding: 16, borderRadius: 6 }}>
+                  "Target explicitly identified themselves as an authority figure and demanded immediate monetary transfer. Extracted parameters match cluster pattern."
+                </div>
+             </div>
+          </div>
+        </div>
+      </ModalShell>
+    );
+  }
 
   return (
-    <ModalShell title="Law Enforcement Portal" onClose={onClose} width={860}>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        <input placeholder="Country..." value={filter.country} onChange={e => { setFilter(f => ({ ...f, country: e.target.value })); setPage(1); }} style={ls.filterInput} />
-        <select value={filter.type} onChange={e => { setFilter(f => ({ ...f, type: e.target.value })); setPage(1); }} style={ls.filterSelect}>
-          <option value="">All Types</option>
-          {(Object.keys(SCAM_TYPES) as ScamType[]).filter(k => k !== 'unknown').map(k => (
-            <option key={k} value={k}>{SCAM_TYPES[k].label}</option>
-          ))}
-        </select>
-        <select value={filter.risk} onChange={e => { setFilter(f => ({ ...f, risk: e.target.value })); setPage(1); }} style={ls.filterSelect}>
-          <option value="">All Risk Levels</option>
-          <option value="high">Critical (80+)</option>
-          <option value="elevated">Elevated (60-79)</option>
-          <option value="moderate">Moderate (40-59)</option>
-        </select>
-        {(filter.country || filter.type || filter.risk) && (
-          <button onClick={() => setFilter({ country: '', type: '', risk: '' })} style={ls.clearBtn}>Clear</button>
-        )}
-        <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-tertiary)', alignSelf: 'center' }}>
-          {filtered.length} incident{filtered.length !== 1 ? 's' : ''}
-        </span>
-      </div>
-
-      <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 6, overflow: 'hidden', marginBottom: 14 }}>
-        <div style={{ ...ls.tableRow, background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-subtle)' }}>
-          <div style={{ width: 28 }}>
-            <input type="checkbox" checked={selected.size === paged.length && paged.length > 0} onChange={toggleAll} style={{ cursor: 'pointer', accentColor: 'var(--accent)' }} />
+    <ModalShell title="Law Enforcement Secure Gateway" onClose={onClose} width={960}>
+      
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, padding: 16, background: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.2)', borderRadius: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 10px #22c55e' }} />
+          <div>
+            <div style={{ color: '#22c55e', fontWeight: 600, fontSize: 14 }}>Connection Secure</div>
+            <div style={{ color: 'var(--text-tertiary)', fontSize: 11, fontFamily: 'monospace' }}>Encrypted link established with INTERPOL Global DB</div>
           </div>
-          {[['country', 'Country / City'], ['date', 'Date'], ['type', 'Type'], ['risk', 'Risk']].map(([col, label]) => (
-            <div key={col} style={{ ...ls.th, cursor: 'pointer' }} onClick={() => handleSort(col)}>
-              {label}<SortIcon col={col} />
-            </div>
-          ))}
-          <div style={ls.th}>Case ID</div>
-          <div style={ls.th}>Entity</div>
-          <div style={{ ...ls.th, flex: 0.6 }}>Action</div>
         </div>
-
-        {paged.length === 0 ? (
-          <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>No incidents match filters</div>
-        ) : paged.map((inc, idx) => {
-          const color = getRiskColor(inc.risk);
-          const t = SCAM_TYPES[inc.type] ?? SCAM_TYPES.unknown;
-          return (
-            <div key={inc.id} style={{ ...ls.tableRow, background: idx % 2 === 0 ? 'var(--bg-secondary)' : 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-subtle)' }}>
-              <div style={{ width: 28 }}>
-                <input type="checkbox" checked={selected.has(inc.id)} onChange={() => toggleSelect(inc.id)} style={{ cursor: 'pointer', accentColor: 'var(--accent)' }} />
-              </div>
-              <div style={ls.td}>
-                <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>{inc.location.country}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{inc.location.city}</div>
-              </div>
-              <div style={{ ...ls.td, fontFamily: 'monospace', fontSize: 11, color: 'var(--text-secondary)' }}>{new Date(inc.timestamp).toLocaleDateString()}</div>
-              <div style={ls.td}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: t.color, background: `${t.color}18`, padding: '2px 7px', borderRadius: 10 }}>{t.short}</span>
-              </div>
-              <div style={{ ...ls.td, fontFamily: 'monospace', fontWeight: 700, color }}>{inc.risk}%</div>
-              <div style={{ ...ls.td, fontFamily: 'monospace', fontSize: 11, color: 'var(--text-mono)' }}>{inc.entities.caseId ?? '—'}</div>
-              <div style={{ ...ls.td, fontSize: 11, color: 'var(--text-secondary)' }}>{inc.entities.institution ?? inc.entities.badge ?? '—'}</div>
-              <div style={{ ...ls.td, flex: 0.6 }}>
-                <button onClick={() => onToast(`Exported incident #${inc.id}`, 'success')} style={ls.viewBtn}>Export</button>
-              </div>
-            </div>
-          );
-        })}
+        <button 
+          onClick={handleSubmitToAgency} 
+          disabled={selected.size === 0 || submitting}
+          style={{ padding: '8px 16px', background: selected.size > 0 ? '#22c55e' : 'var(--bg-tertiary)', color: selected.size > 0 ? '#000' : 'var(--text-tertiary)', border: 'none', borderRadius: 4, fontWeight: 'bold', cursor: selected.size > 0 && !submitting ? 'pointer' : 'not-allowed', transition: 'all 0.2s' }}
+        >
+          {submitting ? 'Transmitting...' : `Submit Selected (${selected.size})`}
+        </button>
       </div>
 
-      {totalPages > 1 && (
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 4, marginBottom: 16 }}>
-          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} style={ls.pageBtn}>‹ Prev</button>
-          {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => i + 1).map(p => (
-            <button key={p} onClick={() => setPage(p)} style={{ ...ls.pageBtn, background: page === p ? 'var(--accent)' : '#252d45', color: page === p ? '#000000' : 'var(--text-secondary)' }}>{p}</button>
-          ))}
-          <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} style={ls.pageBtn}>Next ›</button>
+      <div style={{ border: '1px solid var(--border-emphasis)', borderRadius: 8, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-emphasis)', padding: '12px 16px', gap: 16, alignItems: 'center' }}>
+          <div style={{ width: 24 }}></div>
+          <div style={{ flex: 1, fontSize: 11, color: 'var(--text-secondary)', fontWeight: 'bold', textTransform: 'uppercase' }}>Threat Level</div>
+          <div style={{ flex: 2, fontSize: 11, color: 'var(--text-secondary)', fontWeight: 'bold', textTransform: 'uppercase' }}>Origin</div>
+          <div style={{ flex: 1.5, fontSize: 11, color: 'var(--text-secondary)', fontWeight: 'bold', textTransform: 'uppercase' }}>Entity</div>
+          <div style={{ width: 100 }}></div>
         </div>
-      )}
 
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        {selected.size > 0 && (
-          <button onClick={() => onToast(`Exported ${selected.size} incidents`, 'success')} style={ls.exportBtn}>Export selected ({selected.size})</button>
-        )}
-        <button onClick={() => onToast('JSON export ready', 'success')} style={ls.exportBtnSecondary}>Export JSON</button>
-        <button onClick={() => onToast('PDF generated', 'success')} style={ls.exportBtnSecondary}>Export PDF</button>
+        {paged.map((inc, idx) => (
+          <div key={inc.id} style={{ display: 'flex', background: idx % 2 === 0 ? 'var(--bg-primary)' : 'var(--bg-secondary)', borderBottom: '1px solid var(--border-subtle)', padding: '12px 16px', gap: 16, alignItems: 'center', transition: 'background 0.2s' }}>
+            <div style={{ width: 24 }}>
+              <input type="checkbox" checked={selected.has(inc.id)} onChange={() => { const ns = new Set(selected); ns.has(inc.id) ? ns.delete(inc.id) : ns.add(inc.id); setSelected(ns); }} style={{ accentColor: 'var(--accent)' }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <span style={{ padding: '4px 8px', background: `rgba(${inc.risk > 80 ? '239,68,68' : '249,115,22'}, 0.15)`, color: inc.risk > 80 ? 'var(--threat-live)' : '#f97316', borderRadius: 4, fontSize: 11, fontWeight: 'bold' }}>
+                {inc.risk}% {inc.risk > 80 ? 'CRITICAL' : 'HIGH'}
+              </span>
+            </div>
+            <div style={{ flex: 2 }}>
+              <div style={{ color: 'var(--text-primary)', fontSize: 13 }}>{inc.caller}</div>
+              <div style={{ color: 'var(--text-tertiary)', fontSize: 11 }}>{inc.location.city}, {inc.location.country}</div>
+            </div>
+            <div style={{ flex: 1.5 }}>
+              <div style={{ color: 'var(--text-primary)', fontSize: 13, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{inc.entities.institution || 'Unknown'}</div>
+              <div style={{ color: 'var(--text-tertiary)', fontSize: 11 }}>{SCAM_TYPES[inc.type]?.short}</div>
+            </div>
+            <div style={{ width: 100, textAlign: 'right' }}>
+              <button onClick={() => setViewingDetail(inc)} style={{ padding: '6px 12px', background: 'transparent', border: '1px solid var(--border-emphasis)', color: 'var(--accent)', borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>
+                View File
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }}>
+        <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Showing {paged.length} of {filtered.length} priority cases</div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => (
+            <button key={i+1} onClick={() => setPage(i+1)} style={{ padding: '4px 10px', background: page === i+1 ? 'var(--accent)' : 'var(--bg-secondary)', color: page === i+1 ? '#000' : 'var(--text-secondary)', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
+              {i+1}
+            </button>
+          ))}
+        </div>
       </div>
     </ModalShell>
   );
